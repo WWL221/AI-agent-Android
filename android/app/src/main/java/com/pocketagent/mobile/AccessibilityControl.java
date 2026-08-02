@@ -39,6 +39,19 @@ public class AccessibilityControl extends Plugin {
   }
 
   @PluginMethod
+  public void disable(PluginCall call) {
+    mainHandler.post(() -> {
+      AgentAccessibilityService service = AgentAccessibilityService.getInstance();
+      if (service != null) {
+        service.disableSelf();
+      }
+      JSObject ret = new JSObject();
+      ret.put("ok", true);
+      call.resolve(ret);
+    });
+  }
+
+  @PluginMethod
   public void status(PluginCall call) {
     JSObject ret = new JSObject();
     ret.put("enabled", isServiceEnabled());

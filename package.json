@@ -1,6 +1,6 @@
 {
   "name": "pocket-agent",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "A Codex-style AI agent that runs on Android phones via a mobile-first PWA and a local Node agent server.",
   "type": "module",

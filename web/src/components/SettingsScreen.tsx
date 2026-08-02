@@ -8,6 +8,7 @@ import {
   Cpu,
   Database,
   Download,
+  Info,
   Keyboard,
   MessageSquare,
   MousePointerClick,
@@ -28,9 +29,10 @@ import {
 import { Directory, Filesystem } from '@capacitor/filesystem';
 import { fetchConfig, fetchHealth } from '../api';
 import { hasAllFilesAccess, openAllFilesSettings } from '../fileAccess';
-import { isPhoneControlEnabled, openPhoneControlSettings } from '../phoneControl';
+import { disablePhoneControlService, isPhoneControlEnabled, openPhoneControlSettings } from '../phoneControl';
 import { uid } from '../storage';
 import { applyTheme } from '../theme';
+import { APP_VERSION, RELEASE_NOTES } from '../version';
 import type { McpServer, SearchProvider, ServerConfig, Settings, ThemeMode, Thread } from '../types';
 
 interface Props {
@@ -70,6 +72,7 @@ type SheetId =
   | 'injections'
   | 'proxy'
   | 'storage'
+  | 'about'
   | null;
 
 function formatBytes(bytes: number): string {
@@ -182,6 +185,22 @@ export default function SettingsScreen({
       await openPhoneControlSettings();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : '无法打开无障碍设置');
+    }
+  };
+
+  const togglePhoneControl = async (checked: boolean) => {
+    setDraft({ ...draft, enablePhoneControl: checked });
+    if (!checked) {
+      try {
+        await disablePhoneControlService();
+      } catch {
+        // Service may already be disconnected.
+      }
+      setPhoneControlGranted(false);
+      setStatus('无障碍授权已关闭');
+    } else {
+      setPhoneControlGranted(null);
+      await requestPhoneControl();
     }
   };
 
@@ -431,13 +450,13 @@ export default function SettingsScreen({
         <SettingsSheet title="手机控制" onClose={() => setSheet(null)}>
           <label className="sheet-toggle">
             <span>
-              <strong>允许操作手机 App</strong>
-              <small>需要系统无障碍服务，可读取屏幕并点击、滚动、返回、打开应用</small>
+              <strong>无障碍授权与手机控制</strong>
+              <small>开启时跳转系统授权；关闭时会真正停用无障碍服务</small>
             </span>
             <input
               type="checkbox"
               checked={draft.enablePhoneControl}
-              onChange={(event) => setDraft({ ...draft, enablePhoneControl: event.target.checked })}
+              onChange={(event) => togglePhoneControl(event.target.checked)}
             />
           </label>
           <div className="permission-row">
@@ -720,6 +739,31 @@ export default function SettingsScreen({
         </SettingsSheet>
       );
     }
+    if (sheet === 'about') {
+      return (
+        <SettingsSheet title="版本与更新说明" onClose={() => setSheet(null)}>
+          <div className="about-version">
+            <strong>PocketAgent v{APP_VERSION}</strong>
+            <small>安卓手机上的 AI Agent</small>
+          </div>
+          <div className="about-notes">
+            {RELEASE_NOTES.map((note) => (
+              <div className="about-note" key={note.version}>
+                <div className="about-note-head">
+                  <strong>v{note.version}</strong>
+                  <small>{note.date}</small>
+                </div>
+                <ul>
+                  {note.notes.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </SettingsSheet>
+      );
+    }
     return null;
   };
 
@@ -924,6 +968,17 @@ export default function SettingsScreen({
                 <small>对话保存在手机本地</small>
               </span>
               <span className="kelivo-row-value">{storageLabel}</span>
+              <ChevronRight size={17} />
+            </button>
+            <button className="kelivo-row" onClick={() => setSheet('about')}>
+              <span className="kelivo-row-icon">
+                <Info size={18} />
+              </span>
+              <span className="kelivo-row-copy">
+                <strong>版本与更新说明</strong>
+                <small>查看当前版本和更新记录</small>
+              </span>
+              <span className="kelivo-row-value">v{APP_VERSION}</span>
               <ChevronRight size={17} />
             </button>
           </div>

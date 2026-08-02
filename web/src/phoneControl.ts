@@ -16,6 +16,7 @@ export interface UiNode {
 interface AccessibilityControlPlugin {
   isEnabled: () => Promise<{ enabled: boolean }>;
   openSettings: () => Promise<void>;
+  disable: () => Promise<{ ok: boolean }>;
   status: () => Promise<{ enabled: boolean; foregroundPackage: string }>;
   getUiTree: () => Promise<{ root?: UiNode | null; packageName?: string }>;
   click: (options: { text?: string; x?: number; y?: number }) => Promise<{ ok: boolean }>;
@@ -44,6 +45,11 @@ export async function isPhoneControlEnabled(): Promise<boolean> {
 export async function openPhoneControlSettings(): Promise<void> {
   requireNative();
   await AccessibilityControl.openSettings();
+}
+
+export async function disablePhoneControlService(): Promise<void> {
+  requireNative();
+  await AccessibilityControl.disable();
 }
 
 export async function getPhoneControlStatus(): Promise<{ enabled: boolean; foregroundPackage: string }> {
