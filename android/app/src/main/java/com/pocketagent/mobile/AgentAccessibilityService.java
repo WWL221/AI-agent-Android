@@ -151,7 +151,7 @@ public class AgentAccessibilityService extends AccessibilityService {
 
   private JSObject serialize(AccessibilityNodeInfo node, int depth, int[] counter) {
     JSObject obj = new JSObject();
-    if (node == null || depth > 8 || counter[0] > 240) {
+    if (node == null || depth > 12 || counter[0] > 600) {
       return obj;
     }
     counter[0] += 1;
@@ -174,7 +174,7 @@ public class AgentAccessibilityService extends AccessibilityService {
     box.put(bounds.bottom);
     obj.put("bounds", box);
     JSArray children = new JSArray();
-    for (int i = 0; i < node.getChildCount() && counter[0] <= 240; i += 1) {
+    for (int i = 0; i < node.getChildCount() && counter[0] <= 600; i += 1) {
       AccessibilityNodeInfo child = node.getChild(i);
       children.put(serialize(child, depth + 1, counter));
       if (child != null) child.recycle();

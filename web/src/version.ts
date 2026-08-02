@@ -1,4 +1,4 @@
-export const APP_VERSION = '0.1.7';
+export const APP_VERSION = '0.1.8';
 
 export interface ReleaseNote {
   version: string;
@@ -7,6 +7,11 @@ export interface ReleaseNote {
 }
 
 export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: '0.1.8',
+    date: '2026-08-03',
+    notes: ['屏幕读取支持无文字图标按钮，按坐标点击；读取节点上限提高到 600']
+  },
   {
     version: '0.1.7',
     date: '2026-08-03',

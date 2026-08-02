@@ -919,9 +919,9 @@ async function writePhoneFile(path: string, content: string): Promise<string> {
 
 function summarizeUiTree(node: UiNode | null, depth = 0): string[] {
   const lines: string[] = [];
-  if (!node || lines.length > 60) return lines;
-  const label = node.text || node.contentDescription || '';
-  if ((node.clickable || node.editable) && label) {
+  if (!node || lines.length > 80) return lines;
+  const label = node.text || node.contentDescription || node.className || '未知元素';
+  if (node.clickable || node.editable || node.text || node.contentDescription) {
     lines.push(
       `${'  '.repeat(depth)}${label} [${(node.bounds || []).join(',')}]${node.clickable ? ' 可点' : ''}${node.editable ? ' 可输入' : ''}`
     );
@@ -929,7 +929,7 @@ function summarizeUiTree(node: UiNode | null, depth = 0): string[] {
   for (const child of node.children || []) {
     lines.push(...summarizeUiTree(child, depth + 1));
   }
-  return lines.slice(0, 60);
+  return lines.slice(0, 80);
 }
 
 async function assertPhoneControl(settings: Settings): Promise<void> {
