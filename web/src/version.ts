@@ -1,4 +1,4 @@
-export const APP_VERSION = '0.1.5';
+export const APP_VERSION = '0.1.6';
 
 export interface ReleaseNote {
   version: string;
@@ -7,6 +7,11 @@ export interface ReleaseNote {
 }
 
 export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: '0.1.6',
+    date: '2026-08-03',
+    notes: ['修复应用列表看不到微信、QQ 等应用的问题，可按名称打开']
+  },
   {
     version: '0.1.5',
     date: '2026-08-03',
