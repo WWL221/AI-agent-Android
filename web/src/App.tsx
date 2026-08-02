@@ -45,10 +45,7 @@ function makeThread(title = '新对话'): Thread {
 
 export default function App() {
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
-  const [threads, setThreads] = useState<Thread[]>(() => {
-    const loaded = loadThreads();
-    return loaded.length ? loaded : [makeThread()];
-  });
+  const [threads, setThreads] = useState<Thread[]>(() => loadThreads());
   const [activeId, setActiveId] = useState<string | null>(() => threads[0]?.id ?? null);
   const [tab, setTab] = useState<Tab>('chat');
   const [tasks, setTasks] = useState<AgentTask[]>([]);
@@ -515,10 +512,9 @@ export default function App() {
       if (runRef.current) return;
       const next = threads.filter((thread) => thread.id !== id);
       if (!next.length) {
-        const thread = makeThread();
-        setThreads([thread]);
-        setActiveId(thread.id);
-        activeIdRef.current = thread.id;
+        setThreads([]);
+        setActiveId(null);
+        activeIdRef.current = null;
       } else {
         setThreads(next);
         if (activeId === id) {
@@ -533,9 +529,9 @@ export default function App() {
   );
 
   const handleClearThreads = useCallback(() => {
-    const thread = makeThread();
-    setThreads([thread]);
-    setActiveId(thread.id);
+    setThreads([]);
+    setActiveId(null);
+    activeIdRef.current = null;
     setTab('chat');
   }, []);
 
@@ -579,7 +575,7 @@ export default function App() {
       <main className="main-panel">
         {tab === 'chat' && (
           <ChatScreen
-            thread={activeThread}
+            thread={activeThread ?? null}
             threads={threads}
             activeId={activeId || ''}
             running={running}

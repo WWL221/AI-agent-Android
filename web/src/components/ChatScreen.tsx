@@ -13,7 +13,7 @@ const SUGGESTIONS = [
 ];
 
 interface Props {
-  thread: Thread;
+  thread: Thread | null;
   threads: Thread[];
   activeId: string;
   running: boolean;
@@ -47,7 +47,10 @@ export default function ChatScreen({
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
-  const visibleMessages = useMemo(() => thread.messages.filter((message) => message.content || message.toolCalls.length), [thread.messages]);
+  const visibleMessages = useMemo(
+    () => (thread ? thread.messages.filter((message) => message.content || message.toolCalls.length) : []),
+    [thread]
+  );
   const suggestions = useMemo(() => {
     const custom = (quickPhrases || []).map((phrase) => phrase.trim()).filter(Boolean);
     return custom.length ? custom : SUGGESTIONS;
@@ -58,7 +61,7 @@ export default function ChatScreen({
     const container = scrollRef.current;
     if (!container) return;
     container.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
-  }, [thread.messages, running]);
+  }, [thread?.messages, running]);
 
   const handleMessagesScroll = () => {
     const container = scrollRef.current;
@@ -113,7 +116,7 @@ export default function ChatScreen({
         <div className="topbar-title">
           <span className={`live-dot ${running ? 'active' : ''}`} aria-hidden="true" />
           <div>
-            <h1>{thread.title}</h1>
+            <h1>{thread?.title || '新对话'}</h1>
             <p>{running ? 'Agent 正在执行' : '待命'}</p>
           </div>
         </div>
@@ -225,6 +228,9 @@ export default function ChatScreen({
               </button>
             </div>
             <div className="thread-sheet-list">
+              {threads.length === 0 && (
+                <div className="thread-sheet-empty">暂无对话</div>
+              )}
               {threads.map((item) => {
                 const active = item.id === activeId;
                 return (

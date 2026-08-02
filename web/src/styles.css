@@ -786,6 +786,13 @@ button:disabled {
   margin-bottom: 12px;
 }
 
+.thread-sheet-empty {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--faint);
+  font-size: 13px;
+}
+
 .thread-sheet-row {
   display: flex;
   align-items: center;
