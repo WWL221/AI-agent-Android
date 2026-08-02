@@ -10,6 +10,7 @@ import {
   Download,
   Keyboard,
   MessageSquare,
+  MousePointerClick,
   Network,
   Palette,
   Plus,
@@ -27,6 +28,7 @@ import {
 import { Directory, Filesystem } from '@capacitor/filesystem';
 import { fetchConfig, fetchHealth } from '../api';
 import { hasAllFilesAccess, openAllFilesSettings } from '../fileAccess';
+import { isPhoneControlEnabled, openPhoneControlSettings } from '../phoneControl';
 import { uid } from '../storage';
 import { applyTheme } from '../theme';
 import type { McpServer, SearchProvider, ServerConfig, Settings, ThemeMode, Thread } from '../types';
@@ -59,6 +61,7 @@ type SheetId =
   | 'theme-color'
   | 'preferences'
   | 'assistant'
+  | 'phonecontrol'
   | 'search'
   | 'ocr'
   | 'mcp'
@@ -112,6 +115,7 @@ export default function SettingsScreen({
   const [serverConfig, setServerConfig] = useState<ServerConfig | null>(null);
   const [sheet, setSheet] = useState<SheetId>(null);
   const [fileAccessGranted, setFileAccessGranted] = useState<boolean | null>(null);
+  const [phoneControlGranted, setPhoneControlGranted] = useState<boolean | null>(null);
 
   useEffect(() => {
     applyTheme(draft);
@@ -159,6 +163,25 @@ export default function SettingsScreen({
       await openAllFilesSettings();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : '无法打开系统授权页');
+    }
+  };
+
+  const checkPhoneControl = async () => {
+    setStatus('正在检查无障碍服务…');
+    try {
+      const enabled = await isPhoneControlEnabled();
+      setPhoneControlGranted(enabled);
+      setStatus(enabled ? '无障碍服务已开启' : '无障碍服务未开启');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '无法检查无障碍服务');
+    }
+  };
+
+  const requestPhoneControl = async () => {
+    try {
+      await openPhoneControlSettings();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '无法打开无障碍设置');
     }
   };
 
@@ -396,6 +419,40 @@ export default function SettingsScreen({
             />
             <small>会显示在系统提示中，也用于对话里的自我称呼。</small>
           </label>
+          <button className="primary-button kelivo-save" onClick={save}>
+            <Save size={17} />
+            保存设置
+          </button>
+        </SettingsSheet>
+      );
+    }
+    if (sheet === 'phonecontrol') {
+      return (
+        <SettingsSheet title="手机控制" onClose={() => setSheet(null)}>
+          <label className="sheet-toggle">
+            <span>
+              <strong>允许操作手机 App</strong>
+              <small>需要系统无障碍服务，可读取屏幕并点击、滚动、返回、打开应用</small>
+            </span>
+            <input
+              type="checkbox"
+              checked={draft.enablePhoneControl}
+              onChange={(event) => setDraft({ ...draft, enablePhoneControl: event.target.checked })}
+            />
+          </label>
+          <div className="permission-row">
+            <button className="secondary-button sheet-button" onClick={checkPhoneControl}>
+              检查服务
+            </button>
+            <button className="secondary-button sheet-button" onClick={requestPhoneControl}>
+              开启无障碍
+            </button>
+          </div>
+          {phoneControlGranted !== null && (
+            <p className="sheet-hint">
+              {phoneControlGranted ? '无障碍服务已开启，Agent 可以操作当前屏幕。' : '未开启，点“开启无障碍”到系统设置中允许。'}
+            </p>
+          )}
           <button className="primary-button kelivo-save" onClick={save}>
             <Save size={17} />
             保存设置
@@ -723,6 +780,17 @@ export default function SettingsScreen({
                 <small>助手名称与系统提示</small>
               </span>
               <span className="kelivo-row-value">{draft.assistantName}</span>
+              <ChevronRight size={17} />
+            </button>
+            <button className="kelivo-row" onClick={() => setSheet('phonecontrol')}>
+              <span className="kelivo-row-icon">
+                <MousePointerClick size={18} />
+              </span>
+              <span className="kelivo-row-copy">
+                <strong>手机控制</strong>
+                <small>无障碍操作其他 App</small>
+              </span>
+              <span className="kelivo-row-value">{draft.enablePhoneControl ? '已启用' : '未启用'}</span>
               <ChevronRight size={17} />
             </button>
           </div>

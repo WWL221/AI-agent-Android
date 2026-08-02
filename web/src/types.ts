@@ -66,6 +66,7 @@ export interface Settings {
   enableTasks: boolean;
   allowDirectRead: boolean;
   requireWriteApproval: boolean;
+  enablePhoneControl: boolean;
   worldBook: string;
   injections: string;
   quickPhrases: string[];

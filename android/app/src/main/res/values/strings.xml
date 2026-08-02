@@ -4,4 +4,5 @@
     <string name="title_activity_main">口袋智能体</string>
     <string name="package_name">com.pocketagent.mobile</string>
     <string name="custom_url_scheme">com.pocketagent.mobile</string>
+    <string name="accessibility_service_description">允许口袋智能体读取屏幕内容并点击、滚动、返回等，用于在手机 App 内执行任务。</string>
 </resources>

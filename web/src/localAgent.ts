@@ -2,6 +2,15 @@ import { CapacitorHttp, registerPlugin } from '@capacitor/core';
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
 import { hasAllFilesAccess, listAllFiles, readAllFile } from './fileAccess';
 import { getPhoneInfo, isNative, type PhoneFile } from './phone';
+import {
+  clickPhone,
+  getPhoneUiTree,
+  openPhoneApp,
+  phoneKey,
+  scrollPhone,
+  typePhoneText,
+  type UiNode
+} from './phoneControl';
 import { createLocalTask, deleteLocalTask, listLocalTasks, updateLocalTask } from './localTasks';
 import { uid } from './storage';
 import type { McpServer, Settings } from './types';
@@ -107,6 +116,85 @@ const LOCAL_TOOLS = [
         properties: {
           hint: { type: 'string', description: '想识别哪张图片以及用途' }
         }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'phone_screen',
+      description: '读取当前手机屏幕的可点击元素列表，用于操作其他 App。',
+      parameters: { type: 'object', properties: {} }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'phone_click',
+      description: '点击当前屏幕上的元素，可按文字或坐标点击。',
+      parameters: {
+        type: 'object',
+        properties: {
+          text: { type: 'string', description: '按钮或元素的文字' },
+          x: { type: 'number', description: '点击横坐标' },
+          y: { type: 'number', description: '点击纵坐标' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'phone_scroll',
+      description: '在当前屏幕滚动，direction 可选 forward/backward/up/down/left/right。',
+      parameters: {
+        type: 'object',
+        properties: {
+          direction: { type: 'string', enum: ['forward', 'backward', 'up', 'down', 'left', 'right'] }
+        },
+        required: ['direction']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'phone_key',
+      description: '执行系统按键，action 可选 back/home/recents。',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { type: 'string', enum: ['back', 'home', 'recents'] }
+        },
+        required: ['action']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'phone_open_app',
+      description: '通过包名打开一个手机 App。',
+      parameters: {
+        type: 'object',
+        properties: {
+          packageName: { type: 'string', description: 'App 包名，例如 com.tencent.mm' }
+        },
+        required: ['packageName']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'phone_type',
+      description: '在当前聚焦的输入框输入文字。',
+      parameters: {
+        type: 'object',
+        properties: {
+          text: { type: 'string', description: '要输入的文字' }
+        },
+        required: ['text']
       }
     }
   },
@@ -813,10 +901,26 @@ async function writePhoneFile(path: string, content: string): Promise<string> {
   return `已写入手机 Documents/${path}`;
 }
 
+function summarizeUiTree(node: UiNode | null, depth = 0): string[] {
+  const lines: string[] = [];
+  if (!node || lines.length > 60) return lines;
+  const label = node.text || node.contentDescription || '';
+  if ((node.clickable || node.editable) && label) {
+    lines.push(
+      `${'  '.repeat(depth)}${label} [${(node.bounds || []).join(',')}]${node.clickable ? ' 可点' : ''}${node.editable ? ' 可输入' : ''}`
+    );
+  }
+  for (const child of node.children || []) {
+    lines.push(...summarizeUiTree(child, depth + 1));
+  }
+  return lines.slice(0, 60);
+}
+
 async function executeLocalTool(name: string, args: Record<string, unknown>, settings: Settings): Promise<string> {
   const webEnabled = settings.enableWebSearch !== false;
   const phoneEnabled = settings.enablePhoneTools !== false;
   const tasksEnabled = settings.enableTasks !== false;
+  const controlEnabled = settings.enablePhoneControl === true;
   switch (name) {
     case 'web_search':
       if (!webEnabled) throw new Error('联网搜索已在设置中关闭');
@@ -840,6 +944,32 @@ async function executeLocalTool(name: string, args: Record<string, unknown>, set
       const output = await writePhoneFile(String(args.path || ''), String(args.content || ''));
       return output;
     }
+    case 'phone_screen':
+      if (!controlEnabled) throw new Error('手机控制已在设置中关闭');
+      return summarizeUiTree(await getPhoneUiTree()).join('\n') || '（屏幕没有可操作元素）';
+    case 'phone_click':
+      if (!controlEnabled) throw new Error('手机控制已在设置中关闭');
+      if (args.x !== undefined && args.y !== undefined) {
+        return (await clickPhone({ x: Number(args.x), y: Number(args.y) })) ? '点击成功' : '点击失败';
+      }
+      if (args.text) {
+        return (await clickPhone({ text: String(args.text) })) ? `已点击：${args.text}` : `没有找到可点击元素：${args.text}`;
+      }
+      throw new Error('phone_click 需要 text 或 x/y');
+    case 'phone_scroll':
+      if (!controlEnabled) throw new Error('手机控制已在设置中关闭');
+      return (await scrollPhone(String(args.direction || 'forward') as 'forward')) ? '滚动成功' : '滚动失败';
+    case 'phone_key':
+      if (!controlEnabled) throw new Error('手机控制已在设置中关闭');
+      return (await phoneKey(String(args.action || 'back') as 'back')) ? `已执行 ${args.action || 'back'}` : '按键执行失败';
+    case 'phone_open_app':
+      if (!controlEnabled) throw new Error('手机控制已在设置中关闭');
+      return (await openPhoneApp(String(args.packageName || '')))
+        ? `已打开 ${args.packageName}`
+        : `无法打开 ${args.packageName}`;
+    case 'phone_type':
+      if (!controlEnabled) throw new Error('手机控制已在设置中关闭');
+      return (await typePhoneText(String(args.text || ''))) ? '输入成功' : '输入失败，请先聚焦输入框';
     case 'create_task': {
       if (!tasksEnabled) throw new Error('本地任务已在设置中关闭');
       const task = createLocalTask({ title: String(args.title || ''), notes: String(args.notes || '') });

@@ -53,6 +53,7 @@ export function defaultSettings(): Settings {
     enableTasks: true,
     allowDirectRead: true,
     requireWriteApproval: true,
+    enablePhoneControl: true,
     worldBook: '',
     injections: '',
     quickPhrases: [],
