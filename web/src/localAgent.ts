@@ -5,6 +5,7 @@ import { getPhoneInfo, isNative, type PhoneFile } from './phone';
 import {
   clickPhone,
   getPhoneUiTree,
+  isPhoneControlEnabled,
   listPhoneApps,
   openPhoneApp,
   phoneKey,
@@ -132,8 +133,13 @@ const LOCAL_TOOLS = [
     type: 'function',
     function: {
       name: 'phone_apps',
-      description: '列出手机上可以打开的应用名称和包名。',
-      parameters: { type: 'object', properties: {} }
+      description: '列出手机上可以打开的应用名称和包名，可按关键词筛选。',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: '可选，按应用名或包名关键词筛选' }
+        }
+      }
     }
   },
   {
@@ -926,11 +932,15 @@ function summarizeUiTree(node: UiNode | null, depth = 0): string[] {
   return lines.slice(0, 60);
 }
 
+async function assertPhoneControl(settings: Settings): Promise<void> {
+  if (settings.enablePhoneControl !== true) throw new Error('手机控制已在设置中关闭');
+  if (!(await isPhoneControlEnabled())) throw new Error('无障碍服务未开启，请在设置→手机控制中开启');
+}
+
 async function executeLocalTool(name: string, args: Record<string, unknown>, settings: Settings): Promise<string> {
   const webEnabled = settings.enableWebSearch !== false;
   const phoneEnabled = settings.enablePhoneTools !== false;
   const tasksEnabled = settings.enableTasks !== false;
-  const controlEnabled = settings.enablePhoneControl === true;
   switch (name) {
     case 'web_search':
       if (!webEnabled) throw new Error('联网搜索已在设置中关闭');
@@ -955,19 +965,25 @@ async function executeLocalTool(name: string, args: Record<string, unknown>, set
       return output;
     }
     case 'phone_screen':
-      if (!controlEnabled) throw new Error('手机控制已在设置中关闭');
+      await assertPhoneControl(settings);
       return summarizeUiTree(await getPhoneUiTree()).join('\n') || '（屏幕没有可操作元素）';
     case 'phone_apps': {
-      if (!controlEnabled) throw new Error('手机控制已在设置中关闭');
-      const apps = await listPhoneApps();
+      await assertPhoneControl(settings);
+      const query = String(args.query || args.keyword || '').toLowerCase();
+      const allApps = await listPhoneApps();
+      const apps = query
+        ? allApps.filter(
+            (app) => app.name.toLowerCase().includes(query) || app.packageName.toLowerCase().includes(query)
+          )
+        : allApps;
       if (!apps.length) return '（没有可打开的应用）';
       return apps
-        .slice(0, 80)
+        .slice(0, 150)
         .map((app) => `${app.name} (${app.packageName})`)
         .join('\n');
     }
     case 'phone_click':
-      if (!controlEnabled) throw new Error('手机控制已在设置中关闭');
+      await assertPhoneControl(settings);
       if (args.x !== undefined && args.y !== undefined) {
         return (await clickPhone({ x: Number(args.x), y: Number(args.y) })) ? '点击成功' : '点击失败';
       }
@@ -976,13 +992,13 @@ async function executeLocalTool(name: string, args: Record<string, unknown>, set
       }
       throw new Error('phone_click 需要 text 或 x/y');
     case 'phone_scroll':
-      if (!controlEnabled) throw new Error('手机控制已在设置中关闭');
+      await assertPhoneControl(settings);
       return (await scrollPhone(String(args.direction || 'forward') as 'forward')) ? '滚动成功' : '滚动失败';
     case 'phone_key':
-      if (!controlEnabled) throw new Error('手机控制已在设置中关闭');
+      await assertPhoneControl(settings);
       return (await phoneKey(String(args.action || 'back') as 'back')) ? `已执行 ${args.action || 'back'}` : '按键执行失败';
     case 'phone_open_app': {
-      if (!controlEnabled) throw new Error('手机控制已在设置中关闭');
+      await assertPhoneControl(settings);
       let pkg = String(args.packageName || '');
       const appName = String(args.name || args.app || '');
       if (!pkg && appName) {
@@ -995,11 +1011,11 @@ async function executeLocalTool(name: string, args: Record<string, unknown>, set
         if (!pkg) return `没有找到应用：${appName}`;
       }
       return (await openPhoneApp(pkg))
-        ? `已打开 ${appName || pkg}`
+        ? `已打开 ${appName || pkg} (${pkg})`
         : `无法打开 ${appName || pkg}`;
     }
     case 'phone_type':
-      if (!controlEnabled) throw new Error('手机控制已在设置中关闭');
+      await assertPhoneControl(settings);
       return (await typePhoneText(String(args.text || ''))) ? '输入成功' : '输入失败，请先聚焦输入框';
     case 'create_task': {
       if (!tasksEnabled) throw new Error('本地任务已在设置中关闭');

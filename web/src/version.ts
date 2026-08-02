@@ -1,4 +1,4 @@
-export const APP_VERSION = '0.1.6';
+export const APP_VERSION = '0.1.7';
 
 export interface ReleaseNote {
   version: string;
@@ -7,6 +7,15 @@ export interface ReleaseNote {
 }
 
 export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: '0.1.7',
+    date: '2026-08-03',
+    notes: [
+      '手机控制命令会先检查无障碍服务是否真正开启',
+      '应用列表支持关键词筛选并返回完整列表',
+      '无障碍未开启时给出明确提示，不再假装执行成功'
+    ]
+  },
   {
     version: '0.1.6',
     date: '2026-08-03',
