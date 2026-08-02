@@ -51,6 +51,8 @@ export function defaultSettings(): Settings {
     enableWebSearch: true,
     enablePhoneTools: true,
     enableTasks: true,
+    allowDirectRead: true,
+    requireWriteApproval: true,
     worldBook: '',
     injections: '',
     quickPhrases: [],

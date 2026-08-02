@@ -1,5 +1,6 @@
 import { CapacitorHttp, registerPlugin } from '@capacitor/core';
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
+import { hasAllFilesAccess, listAllFiles, readAllFile } from './fileAccess';
 import { getPhoneInfo, isNative, type PhoneFile } from './phone';
 import { createLocalTask, deleteLocalTask, listLocalTasks, updateLocalTask } from './localTasks';
 import { uid } from './storage';
@@ -13,6 +14,14 @@ export interface PhoneFileRequest {
 }
 
 export type PhoneFileResult = { status: 'ok'; output: string } | { status: 'error'; error: string };
+
+export interface LocalApprovalRequest {
+  requestId: string;
+  toolId: string;
+  name: string;
+  summary: string;
+  detail?: string;
+}
 
 export interface LocalAgentEvent {
   type: string;
@@ -771,13 +780,21 @@ async function fetchUrl(url: string, proxyUrl = ''): Promise<string> {
   return truncate(htmlToText(html), 12000);
 }
 
-async function listPhoneFiles(path = ''): Promise<string> {
+async function listPhoneFiles(path = '', direct = false): Promise<string> {
+  if (direct) {
+    const entries = await listAllFiles(path || '/storage/emulated/0');
+    if (!entries.length) return '（空目录）';
+    return entries.map((entry) => `${entry.name}${entry.isDirectory ? '/' : ''}`).join('\n');
+  }
   const result = await Filesystem.readdir({ path: String(path || ''), directory: Directory.Documents });
   const lines = (result.files || []).map((file) => `${file.name}${file.type === 'directory' ? '/' : ''}`);
   return lines.length ? lines.join('\n') : '（空目录）';
 }
 
-async function readPhoneFile(path: string): Promise<string> {
+async function readPhoneFile(path: string, direct = false): Promise<string> {
+  if (direct) {
+    return truncate(await readAllFile(String(path)), 100000);
+  }
   const result = await Filesystem.readFile({
     path: String(path || ''),
     directory: Directory.Documents,
@@ -812,10 +829,12 @@ async function executeLocalTool(name: string, args: Record<string, unknown>, set
       return JSON.stringify(await getPhoneInfo(), null, 2);
     case 'list_phone_files':
       if (!phoneEnabled) throw new Error('手机能力已在设置中关闭');
-      return listPhoneFiles(String(args.path || ''));
+      const directList = settings.allowDirectRead !== false && (await hasAllFilesAccess());
+      return listPhoneFiles(String(args.path || ''), directList);
     case 'read_phone_file':
       if (!phoneEnabled) throw new Error('手机能力已在设置中关闭');
-      return readPhoneFile(String(args.path || ''));
+      const directRead = settings.allowDirectRead !== false && (await hasAllFilesAccess());
+      return readPhoneFile(String(args.path || ''), directRead);
     case 'write_phone_file': {
       if (!phoneEnabled) throw new Error('手机能力已在设置中关闭');
       const output = await writePhoneFile(String(args.path || ''), String(args.content || ''));
@@ -856,8 +875,9 @@ export async function runLocalAgent(options: {
   onEvent: (event: LocalAgentEvent) => void;
   signal: AbortSignal;
   requestPhoneFile: (request: PhoneFileRequest) => Promise<PhoneFileResult>;
+  requestApproval: (request: LocalApprovalRequest) => Promise<'allow' | 'deny'>;
 }): Promise<void> {
-  const { settings, messages, onEvent, signal, requestPhoneFile } = options;
+  const { settings, messages, onEvent, signal, requestPhoneFile, requestApproval } = options;
   const emit = (event: LocalAgentEvent) => emitSafe(onEvent, event);
   if (!settings.apiKey) {
     emit({ type: 'error', message: '请在设置里填写 API Key，或开启演示模式' });
@@ -964,6 +984,16 @@ export async function runLocalAgent(options: {
           const phoneResult = await requestPhoneFile({ requestId, toolId: id, name, summary });
           if (phoneResult.status !== 'ok') throw new Error(phoneResult.error || '用户取消了文件选择');
           output = phoneResult.output;
+        } else if (name === 'write_phone_file') {
+          if (settings.enablePhoneTools === false) throw new Error('手机能力已在设置中关闭');
+          if (settings.requireWriteApproval !== false) {
+            const requestId = uid();
+            const summary = `写入文件：${String(args.path || '')}`;
+            const detail = `内容：${String(args.content || '').slice(0, 200)}`;
+            const decision = await requestApproval({ requestId, toolId: id, name, summary, detail });
+            if (decision !== 'allow') throw new Error('用户拒绝了文件写入');
+          }
+          output = await executeLocalTool(name, args, settings);
         } else {
           output = await executeLocalTool(name, args, settings);
         }

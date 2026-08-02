@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { Directory, Filesystem } from '@capacitor/filesystem';
 import { fetchConfig, fetchHealth } from '../api';
+import { hasAllFilesAccess, openAllFilesSettings } from '../fileAccess';
 import { uid } from '../storage';
 import { applyTheme } from '../theme';
 import type { McpServer, SearchProvider, ServerConfig, Settings, ThemeMode, Thread } from '../types';
@@ -110,6 +111,7 @@ export default function SettingsScreen({
   const [status, setStatus] = useState('');
   const [serverConfig, setServerConfig] = useState<ServerConfig | null>(null);
   const [sheet, setSheet] = useState<SheetId>(null);
+  const [fileAccessGranted, setFileAccessGranted] = useState<boolean | null>(null);
 
   useEffect(() => {
     applyTheme(draft);
@@ -138,6 +140,25 @@ export default function SettingsScreen({
     } catch (error) {
       setServerConfig(null);
       setStatus(error instanceof Error ? error.message : '连接失败');
+    }
+  };
+
+  const checkFileAccess = async () => {
+    setStatus('正在检查文件访问权限…');
+    try {
+      const granted = await hasAllFilesAccess();
+      setFileAccessGranted(granted);
+      setStatus(granted ? '已获得“所有文件访问”权限' : '尚未获得“所有文件访问”权限');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '无法检查文件权限');
+    }
+  };
+
+  const requestFileAccess = async () => {
+    try {
+      await openAllFilesSettings();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '无法打开系统授权页');
     }
   };
 
@@ -310,6 +331,39 @@ export default function SettingsScreen({
               type="checkbox"
               checked={draft.enablePhoneTools}
               onChange={(event) => setDraft({ ...draft, enablePhoneTools: event.target.checked })}
+            />
+          </label>
+          <label className="sheet-toggle">
+            <span>
+              <strong>直接读取全部文件</strong>
+              <small>需要系统“所有文件访问”权限，读取不再逐个选文件</small>
+            </span>
+            <input
+              type="checkbox"
+              checked={draft.allowDirectRead}
+              onChange={(event) => setDraft({ ...draft, allowDirectRead: event.target.checked })}
+            />
+          </label>
+          <div className="permission-row">
+            <button className="secondary-button sheet-button" onClick={checkFileAccess}>
+              检查权限
+            </button>
+            <button className="secondary-button sheet-button" onClick={requestFileAccess}>
+              前往授权
+            </button>
+          </div>
+          {fileAccessGranted !== null && (
+            <p className="sheet-hint">{fileAccessGranted ? '权限已开启，可直接读取手机文件。' : '未开启，点“前往授权”到系统设置允许。'}</p>
+          )}
+          <label className="sheet-toggle">
+            <span>
+              <strong>写入文件需要审批</strong>
+              <small>Agent 写入文件前必须经过你确认</small>
+            </span>
+            <input
+              type="checkbox"
+              checked={draft.requireWriteApproval}
+              onChange={(event) => setDraft({ ...draft, requireWriteApproval: event.target.checked })}
             />
           </label>
           <label className="sheet-toggle">

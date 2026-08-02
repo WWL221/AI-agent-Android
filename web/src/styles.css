@@ -1964,6 +1964,15 @@ button.kelivo-row-copy {
   accent-color: var(--mint);
 }
 
+.permission-row {
+  display: flex;
+  gap: 8px;
+}
+
+.permission-row .sheet-button {
+  flex: 1;
+}
+
 .sheet-button {
   min-height: 44px;
   display: inline-flex;

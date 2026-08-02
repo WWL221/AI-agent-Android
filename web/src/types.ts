@@ -64,6 +64,8 @@ export interface Settings {
   enableWebSearch: boolean;
   enablePhoneTools: boolean;
   enableTasks: boolean;
+  allowDirectRead: boolean;
+  requireWriteApproval: boolean;
   worldBook: string;
   injections: string;
   quickPhrases: string[];

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CircleStop, List, MessageSquarePlus, Paperclip, Send, Sparkles, Trash2, X } from 'lucide-react';
 import { recognizeImage } from '../localAgent';
 import type { Settings, Thread } from '../types';
@@ -46,11 +46,25 @@ export default function ChatScreen({
   const [showThreads, setShowThreads] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
   const visibleMessages = useMemo(() => thread.messages.filter((message) => message.content || message.toolCalls.length), [thread.messages]);
   const suggestions = useMemo(() => {
     const custom = (quickPhrases || []).map((phrase) => phrase.trim()).filter(Boolean);
     return custom.length ? custom : SUGGESTIONS;
   }, [quickPhrases]);
+
+  useEffect(() => {
+    if (!stickToBottomRef.current) return;
+    const container = scrollRef.current;
+    if (!container) return;
+    container.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
+  }, [thread.messages, running]);
+
+  const handleMessagesScroll = () => {
+    const container = scrollRef.current;
+    if (!container) return;
+    stickToBottomRef.current = container.scrollHeight - container.scrollTop - container.clientHeight < 90;
+  };
 
   const submit = async () => {
     const value = text.trim();
@@ -119,7 +133,7 @@ export default function ChatScreen({
         </div>
       </header>
 
-      <div className="messages" ref={scrollRef}>
+      <div className="messages" ref={scrollRef} onScroll={handleMessagesScroll}>
         {visibleMessages.length === 0 ? (
           <div className="empty-chat">
             <div className="empty-sigil" aria-hidden="true">

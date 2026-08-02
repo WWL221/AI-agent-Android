@@ -60,6 +60,7 @@ export default function App() {
   const activeIdRef = useRef(activeId);
   const runRef = useRef<{ controller: AbortController; runId: string } | null>(null);
   const localPhoneResolvers = useRef(new Map<string, (result: PhoneFileResult) => void>());
+  const localApprovalResolvers = useRef(new Map<string, (decision: 'allow' | 'deny') => void>());
 
   useEffect(() => {
     activeIdRef.current = activeId;
@@ -335,7 +336,27 @@ export default function App() {
             messages: runMessages,
             onEvent: handleEvent,
             signal: controller.signal,
-            requestPhoneFile
+            requestPhoneFile,
+            requestApproval: (request) =>
+              new Promise<'allow' | 'deny'>((resolve) => {
+                localApprovalResolvers.current.set(request.requestId, resolve);
+                setPendingApproval({
+                  requestId: request.requestId,
+                  toolId: request.toolId,
+                  name: request.name,
+                  summary: request.summary,
+                  detail: request.detail
+                });
+                patchTool(assistantMessage.id, request.toolId, (tool) => ({
+                  ...tool,
+                  status: 'waiting',
+                  approval: {
+                    requestId: request.requestId,
+                    summary: request.summary,
+                    detail: request.detail
+                  }
+                }));
+              })
           });
         } else {
           await runAgent(runSettings, runMessages, handleEvent, controller.signal);
@@ -350,6 +371,7 @@ export default function App() {
       } finally {
         runRef.current = null;
         localPhoneResolvers.current.clear();
+        localApprovalResolvers.current.clear();
         setPendingApproval(null);
         setPhoneToolRequest(null);
         setPhoneToolBusy(false);
@@ -363,6 +385,12 @@ export default function App() {
       if (!pendingApproval) return;
       const requestId = pendingApproval.requestId;
       setPendingApproval(null);
+      const localResolver = localApprovalResolvers.current.get(requestId);
+      if (localResolver) {
+        localApprovalResolvers.current.delete(requestId);
+        localResolver(decision);
+        return;
+      }
       try {
         await approveRequest(settings, requestId, decision, remember);
       } catch (error) {
@@ -391,6 +419,10 @@ export default function App() {
       resolve({ status: 'error', error: '运行已取消' });
     }
     localPhoneResolvers.current.clear();
+    for (const resolve of localApprovalResolvers.current.values()) {
+      resolve('deny');
+    }
+    localApprovalResolvers.current.clear();
     patchActiveThread((thread) => ({ ...thread, status: 'idle', updatedAt: Date.now() }));
     runRef.current = null;
   }, [patchActiveThread, settings]);
