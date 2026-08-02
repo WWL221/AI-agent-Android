@@ -13,6 +13,11 @@ export interface UiNode {
   children?: UiNode[];
 }
 
+export interface PhoneAppInfo {
+  name: string;
+  packageName: string;
+}
+
 interface AccessibilityControlPlugin {
   isEnabled: () => Promise<{ enabled: boolean }>;
   openSettings: () => Promise<void>;
@@ -23,6 +28,7 @@ interface AccessibilityControlPlugin {
   scroll: (options: { direction: string }) => Promise<{ ok: boolean }>;
   key: (options: { action: string }) => Promise<{ ok: boolean }>;
   openApp: (options: { packageName: string }) => Promise<{ ok: boolean }>;
+  listApps: () => Promise<{ apps: PhoneAppInfo[] }>;
   typeText: (options: { text: string }) => Promise<{ ok: boolean }>;
 }
 
@@ -85,6 +91,12 @@ export async function openPhoneApp(packageName: string): Promise<boolean> {
   requireNative();
   const result = await AccessibilityControl.openApp({ packageName });
   return Boolean(result.ok);
+}
+
+export async function listPhoneApps(): Promise<PhoneAppInfo[]> {
+  requireNative();
+  const result = await AccessibilityControl.listApps();
+  return Array.isArray(result.apps) ? result.apps : [];
 }
 
 export async function typePhoneText(text: string): Promise<boolean> {

@@ -1,4 +1,4 @@
-export const APP_VERSION = '0.1.4';
+export const APP_VERSION = '0.1.5';
 
 export interface ReleaseNote {
   version: string;
@@ -7,6 +7,11 @@ export interface ReleaseNote {
 }
 
 export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: '0.1.5',
+    date: '2026-08-03',
+    notes: ['Agent 可按应用名称打开 App，并支持列出已安装应用']
+  },
   {
     version: '0.1.4',
     date: '2026-08-03',

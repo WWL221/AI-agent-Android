@@ -2,11 +2,13 @@ package com.pocketagent.mobile;
 
 import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.Intent;
+import android.content.pm.ResolveInfo;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
 import android.view.accessibility.AccessibilityManager;
 
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -132,6 +134,24 @@ public class AccessibilityControl extends Plugin {
       ret.put("ok", service.openApp(call.getString("packageName", "")));
       call.resolve(ret);
     });
+  }
+
+  @PluginMethod
+  public void listApps(PluginCall call) {
+    Intent mainIntent = new Intent(Intent.ACTION_MAIN);
+    mainIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+    List<ResolveInfo> apps = getContext().getPackageManager().queryIntentActivities(mainIntent, 0);
+    JSArray result = new JSArray();
+    for (ResolveInfo info : apps) {
+      if (info == null || info.activityInfo == null) continue;
+      JSObject app = new JSObject();
+      app.put("name", String.valueOf(info.loadLabel(getContext().getPackageManager())));
+      app.put("packageName", info.activityInfo.packageName);
+      result.put(app);
+    }
+    JSObject ret = new JSObject();
+    ret.put("apps", result);
+    call.resolve(ret);
   }
 
   @PluginMethod

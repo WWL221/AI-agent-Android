@@ -5,6 +5,7 @@ import { getPhoneInfo, isNative, type PhoneFile } from './phone';
 import {
   clickPhone,
   getPhoneUiTree,
+  listPhoneApps,
   openPhoneApp,
   phoneKey,
   scrollPhone,
@@ -130,6 +131,14 @@ const LOCAL_TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'phone_apps',
+      description: '列出手机上可以打开的应用名称和包名。',
+      parameters: { type: 'object', properties: {} }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'phone_click',
       description: '点击当前屏幕上的元素，可按文字或坐标点击。',
       parameters: {
@@ -174,13 +183,14 @@ const LOCAL_TOOLS = [
     type: 'function',
     function: {
       name: 'phone_open_app',
-      description: '通过包名打开一个手机 App。',
+      description: '打开一个手机 App，可以填应用名称或包名。',
       parameters: {
         type: 'object',
         properties: {
+          name: { type: 'string', description: '应用名称，例如 微信、设置' },
           packageName: { type: 'string', description: 'App 包名，例如 com.tencent.mm' }
         },
-        required: ['packageName']
+        required: []
       }
     }
   },
@@ -947,6 +957,15 @@ async function executeLocalTool(name: string, args: Record<string, unknown>, set
     case 'phone_screen':
       if (!controlEnabled) throw new Error('手机控制已在设置中关闭');
       return summarizeUiTree(await getPhoneUiTree()).join('\n') || '（屏幕没有可操作元素）';
+    case 'phone_apps': {
+      if (!controlEnabled) throw new Error('手机控制已在设置中关闭');
+      const apps = await listPhoneApps();
+      if (!apps.length) return '（没有可打开的应用）';
+      return apps
+        .slice(0, 80)
+        .map((app) => `${app.name} (${app.packageName})`)
+        .join('\n');
+    }
     case 'phone_click':
       if (!controlEnabled) throw new Error('手机控制已在设置中关闭');
       if (args.x !== undefined && args.y !== undefined) {
@@ -962,11 +981,23 @@ async function executeLocalTool(name: string, args: Record<string, unknown>, set
     case 'phone_key':
       if (!controlEnabled) throw new Error('手机控制已在设置中关闭');
       return (await phoneKey(String(args.action || 'back') as 'back')) ? `已执行 ${args.action || 'back'}` : '按键执行失败';
-    case 'phone_open_app':
+    case 'phone_open_app': {
       if (!controlEnabled) throw new Error('手机控制已在设置中关闭');
-      return (await openPhoneApp(String(args.packageName || '')))
-        ? `已打开 ${args.packageName}`
-        : `无法打开 ${args.packageName}`;
+      let pkg = String(args.packageName || '');
+      const appName = String(args.name || args.app || '');
+      if (!pkg && appName) {
+        const apps = await listPhoneApps();
+        const lower = appName.toLowerCase();
+        const found =
+          apps.find((app) => app.name.toLowerCase().includes(lower)) ||
+          apps.find((app) => app.packageName.toLowerCase().includes(lower));
+        pkg = found ? found.packageName : '';
+        if (!pkg) return `没有找到应用：${appName}`;
+      }
+      return (await openPhoneApp(pkg))
+        ? `已打开 ${appName || pkg}`
+        : `无法打开 ${appName || pkg}`;
+    }
     case 'phone_type':
       if (!controlEnabled) throw new Error('手机控制已在设置中关闭');
       return (await typePhoneText(String(args.text || ''))) ? '输入成功' : '输入失败，请先聚焦输入框';
