@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, Circle, ListTodo, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Check, Circle, CircleStop, ListTodo, Play, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { createTask, deleteTask, patchTask } from '../api';
 import { createLocalTask, deleteLocalTask, updateLocalTask } from '../localTasks';
 import type { AgentTask, Settings } from '../types';
@@ -9,10 +9,13 @@ interface Props {
   tasks: AgentTask[];
   setTasks: (tasks: AgentTask[]) => void;
   error: string;
+  running: boolean;
+  onCancel: () => void;
   onRefresh: () => void;
+  onRunTask: (task: AgentTask) => void;
 }
 
-export default function TaskScreen({ settings, tasks, setTasks, error, onRefresh }: Props) {
+export default function TaskScreen({ settings, tasks, setTasks, error, running, onCancel, onRefresh, onRunTask }: Props) {
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
@@ -95,6 +98,16 @@ export default function TaskScreen({ settings, tasks, setTasks, error, onRefresh
       </header>
 
       <div className="task-body">
+        {running && (
+          <div className="task-running">
+            <span>Agent 正在执行任务</span>
+            <button className="danger-button compact" onClick={onCancel}>
+              <CircleStop size={16} />
+              停止
+            </button>
+          </div>
+        )}
+
         <div className="task-compose">
           <div className="task-input-row">
             <input
@@ -138,6 +151,15 @@ export default function TaskScreen({ settings, tasks, setTasks, error, onRefresh
                     {task.status === 'done' ? '已完成' : task.status === 'in_progress' ? '进行中' : '待办'}
                   </span>
                 </div>
+                <button
+                  className="task-run"
+                  onClick={() => onRunTask(task)}
+                  disabled={running}
+                  aria-label="让 AI 执行"
+                  title="让 AI 执行"
+                >
+                  <Play size={16} />
+                </button>
                 <button className="task-delete" onClick={() => remove(task)} aria-label="删除任务" title="删除任务">
                   <Trash2 size={17} />
                 </button>

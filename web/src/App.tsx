@@ -45,7 +45,9 @@ function makeThread(title = '新对话'): Thread {
 
 export default function App() {
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
-  const [threads, setThreads] = useState<Thread[]>(() => loadThreads());
+  const [threads, setThreads] = useState<Thread[]>(() =>
+    loadThreads().map((thread) => (thread.status === 'running' ? { ...thread, status: 'idle' } : thread))
+  );
   const [activeId, setActiveId] = useState<string | null>(() => threads[0]?.id ?? null);
   const [tab, setTab] = useState<Tab>('chat');
   const [tasks, setTasks] = useState<AgentTask[]>([]);
@@ -55,7 +57,7 @@ export default function App() {
   const [tasksError, setTasksError] = useState('');
 
   const activeIdRef = useRef(activeId);
-  const runRef = useRef<{ controller: AbortController; runId: string } | null>(null);
+  const runRef = useRef<{ controller: AbortController; runId: string; targetId: string } | null>(null);
   const localPhoneResolvers = useRef(new Map<string, (result: PhoneFileResult) => void>());
   const localApprovalResolvers = useRef(new Map<string, (decision: 'allow' | 'deny') => void>());
 
@@ -92,6 +94,10 @@ export default function App() {
   const patchActiveThread = useCallback((updater: (thread: Thread) => Thread) => {
     const id = activeIdRef.current;
     if (!id) return;
+    setThreads((prev) => prev.map((thread) => (thread.id === id ? updater(thread) : thread)));
+  }, []);
+
+  const patchThread = useCallback((id: string, updater: (thread: Thread) => Thread) => {
     setThreads((prev) => prev.map((thread) => (thread.id === id ? updater(thread) : thread)));
   }, []);
 
@@ -191,7 +197,20 @@ export default function App() {
 
       setTab('chat');
       const controller = new AbortController();
-      runRef.current = { controller, runId: '' };
+      runRef.current = { controller, runId: '', targetId };
+
+      const patchRunThread = (updater: (thread: Thread) => Thread) => patchThread(targetId, updater);
+      const patchRunAssistant = (messageId: string, updater: (message: Message) => Message) =>
+        patchRunThread((thread) => ({
+          ...thread,
+          updatedAt: Date.now(),
+          messages: thread.messages.map((message) => (message.id === messageId ? updater(message) : message))
+        }));
+      const patchRunTool = (messageId: string, toolId: string, updater: (tool: ToolCallRecord) => ToolCallRecord) =>
+        patchRunAssistant(messageId, (message) => ({
+          ...message,
+          toolCalls: message.toolCalls.map((tool) => (tool.id === toolId ? updater(tool) : tool))
+        }));
 
       const runMessages = threads
         .find((item) => item.id === targetId)
@@ -204,7 +223,7 @@ export default function App() {
           return;
         }
         if (event.type === 'delta') {
-          patchAssistant(assistantMessage.id, (message) => ({
+          patchRunAssistant(assistantMessage.id, (message) => ({
             ...message,
             content: `${message.content}${String(event.content || '')}`
           }));
@@ -213,7 +232,7 @@ export default function App() {
         if (event.type === 'tool-call') {
           const toolId = String(event.id || uid());
           const name = String(event.name || '');
-          patchAssistant(assistantMessage.id, (message) => {
+          patchRunAssistant(assistantMessage.id, (message) => {
             if (message.toolCalls.some((tool) => tool.id === toolId)) return message;
             return {
               ...message,
@@ -231,14 +250,14 @@ export default function App() {
           return;
         }
         if (event.type === 'tool-status') {
-          patchTool(assistantMessage.id, String(event.id), (tool) => ({
+          patchRunTool(assistantMessage.id, String(event.id), (tool) => ({
             ...tool,
             status: event.status === 'running' ? 'running' : tool.status
           }));
           return;
         }
         if (event.type === 'tool-result') {
-          patchTool(assistantMessage.id, String(event.id), (tool) => ({
+          patchRunTool(assistantMessage.id, String(event.id), (tool) => ({
             ...tool,
             status: event.status === 'success' ? 'success' : 'error',
             output: event.output ? String(event.output) : tool.output,
@@ -256,7 +275,7 @@ export default function App() {
             summary: String(event.summary || '需要批准'),
             detail: event.detail ? String(event.detail) : undefined
           });
-          patchTool(assistantMessage.id, toolId, (tool) => ({
+          patchRunTool(assistantMessage.id, toolId, (tool) => ({
             ...tool,
             status: 'waiting',
             approval: {
@@ -277,7 +296,7 @@ export default function App() {
             summary: String(event.summary || '手机端操作')
           };
           setPhoneToolRequest(request);
-          patchTool(assistantMessage.id, toolId, (tool) => ({
+          patchRunTool(assistantMessage.id, toolId, (tool) => ({
             ...tool,
             status: 'waiting'
           }));
@@ -309,15 +328,15 @@ export default function App() {
         }
         if (event.type === 'error') {
           const message = String(event.message || '运行失败');
-          patchAssistant(assistantMessage.id, (messageItem) => ({
+          patchRunAssistant(assistantMessage.id, (messageItem) => ({
             ...messageItem,
             error: message
           }));
-          patchActiveThread((thread) => ({ ...thread, status: 'error', updatedAt: Date.now() }));
+          patchRunThread((thread) => ({ ...thread, status: 'error', updatedAt: Date.now() }));
           return;
         }
         if (event.type === 'done') {
-          patchActiveThread((thread) => ({ ...thread, status: 'idle', updatedAt: Date.now() }));
+          patchRunThread((thread) => ({ ...thread, status: 'idle', updatedAt: Date.now() }));
           refreshTasks();
         }
       };
@@ -344,7 +363,7 @@ export default function App() {
                   summary: request.summary,
                   detail: request.detail
                 });
-                patchTool(assistantMessage.id, request.toolId, (tool) => ({
+                patchRunTool(assistantMessage.id, request.toolId, (tool) => ({
                   ...tool,
                   status: 'waiting',
                   approval: {
@@ -359,12 +378,12 @@ export default function App() {
           await runAgent(runSettings, runMessages, handleEvent, controller.signal);
         }
         if (runRef.current) {
-          patchActiveThread((thread) => ({ ...thread, status: 'idle', updatedAt: Date.now() }));
+          patchRunThread((thread) => ({ ...thread, status: 'idle', updatedAt: Date.now() }));
         }
       } catch (error) {
         const message = error instanceof Error && error.name === 'AbortError' ? '运行已取消' : error instanceof Error ? error.message : '无法连接 Agent 服务';
-        patchAssistant(assistantMessage.id, (item) => ({ ...item, error: message }));
-        patchActiveThread((thread) => ({ ...thread, status: 'error', updatedAt: Date.now() }));
+        patchRunAssistant(assistantMessage.id, (item) => ({ ...item, error: message }));
+        patchRunThread((thread) => ({ ...thread, status: 'error', updatedAt: Date.now() }));
       } finally {
         runRef.current = null;
         localPhoneResolvers.current.clear();
@@ -374,7 +393,7 @@ export default function App() {
         setPhoneToolBusy(false);
       }
     },
-    [patchActiveThread, patchAssistant, patchTool, refreshTasks, settings, threads]
+    [patchThread, refreshTasks, settings, threads]
   );
 
   const handleDecision = useCallback(
@@ -420,9 +439,9 @@ export default function App() {
       resolve('deny');
     }
     localApprovalResolvers.current.clear();
-    patchActiveThread((thread) => ({ ...thread, status: 'idle', updatedAt: Date.now() }));
+    patchThread(run.targetId, (thread) => ({ ...thread, status: 'idle', updatedAt: Date.now() }));
     runRef.current = null;
-  }, [patchActiveThread, settings]);
+  }, [patchThread, settings]);
 
   const requestPhoneFile = useCallback((request: PhoneFileRequest): Promise<PhoneFileResult> => {
     return new Promise((resolve) => {
@@ -494,16 +513,16 @@ export default function App() {
   );
 
   const handleNewThread = useCallback(() => {
-    if (runRef.current) return;
     const thread = makeThread();
     setThreads((prev) => [thread, ...prev]);
     setActiveId(thread.id);
+    activeIdRef.current = thread.id;
     setTab('chat');
   }, []);
 
   const handleSelectThread = useCallback((id: string) => {
-    if (runRef.current) return;
     setActiveId(id);
+    activeIdRef.current = id;
     setTab('chat');
   }, []);
 
@@ -526,6 +545,20 @@ export default function App() {
       setTab('chat');
     },
     [activeId, threads]
+  );
+
+  const handleRunTask = useCallback(
+    (task: AgentTask) => {
+      if (runRef.current) return;
+      const text = `执行任务：${task.title}${task.notes ? `\n补充说明：${task.notes}` : ''}`;
+      activeIdRef.current = null;
+      setActiveId(null);
+      setTab('chat');
+      setTimeout(() => {
+        void sendMessage(text, true);
+      }, 30);
+    },
+    [sendMessage]
   );
 
   const handleClearThreads = useCallback(() => {
@@ -589,7 +622,16 @@ export default function App() {
           />
         )}
         {tab === 'tasks' && (
-          <TaskScreen settings={settings} tasks={tasks} setTasks={setTasks} error={tasksError} onRefresh={refreshTasks} />
+          <TaskScreen
+            settings={settings}
+            tasks={tasks}
+            setTasks={setTasks}
+            error={tasksError}
+            running={running}
+            onCancel={handleCancel}
+            onRefresh={refreshTasks}
+            onRunTask={handleRunTask}
+          />
         )}
         {tab === 'settings' && (
           <SettingsScreen

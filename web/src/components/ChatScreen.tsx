@@ -127,13 +127,13 @@ export default function ChatScreen({
           <button
             className="icon-button"
             onClick={() => setShowThreads(true)}
-            disabled={running || processingAttachment}
+            disabled={processingAttachment}
             aria-label="切换对话"
             title="切换对话"
           >
             <List size={20} />
           </button>
-          <button className="icon-button" onClick={onNew} disabled={running} aria-label="新建对话" title="新建对话">
+          <button className="icon-button" onClick={onNew} disabled={processingAttachment} aria-label="新建对话" title="新建对话">
             <MessageSquarePlus size={20} />
           </button>
         </div>
@@ -246,7 +246,6 @@ export default function ChatScreen({
                         setShowThreads(false);
                         setConfirmDeleteId(null);
                       }}
-                      disabled={running}
                     >
                       <span className="thread-sheet-status" data-status={item.status} />
                       <span className="thread-sheet-copy">
@@ -288,7 +287,7 @@ export default function ChatScreen({
                 );
               })}
             </div>
-            <button className="primary-button kelivo-save" onClick={onNew} disabled={running}>
+            <button className="primary-button kelivo-save" onClick={onNew}>
               <MessageSquarePlus size={17} />
               新建对话
             </button>

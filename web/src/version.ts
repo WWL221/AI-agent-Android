@@ -1,4 +1,4 @@
-export const APP_VERSION = '0.1.9';
+export const APP_VERSION = '0.1.10';
 
 export interface ReleaseNote {
   version: string;
@@ -7,6 +7,15 @@ export interface ReleaseNote {
 }
 
 export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: '0.1.10',
+    date: '2026-08-03',
+    notes: [
+      '启动时自动复位卡住的“运行中”状态',
+      '运行中允许切换对话和新建对话',
+      '任务页新增“AI 直接执行”和停止按钮'
+    ]
+  },
   {
     version: '0.1.9',
     date: '2026-08-03',
