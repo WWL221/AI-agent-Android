@@ -1,4 +1,4 @@
-export const APP_VERSION = '0.1.8';
+export const APP_VERSION = '0.1.9';
 
 export interface ReleaseNote {
   version: string;
@@ -7,6 +7,11 @@ export interface ReleaseNote {
 }
 
 export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: '0.1.9',
+    date: '2026-08-03',
+    notes: ['修复发图片/文件时界面卡死：OCR 增加 45 秒超时，处理中显示提示，取消按钮保持可用']
+  },
   {
     version: '0.1.8',
     date: '2026-08-03',

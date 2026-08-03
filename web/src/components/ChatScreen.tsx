@@ -43,6 +43,7 @@ export default function ChatScreen({
   const [deep, setDeep] = useState(false);
   const [attachment, setAttachment] = useState<PhoneFile | null>(null);
   const [attachError, setAttachError] = useState('');
+  const [processingAttachment, setProcessingAttachment] = useState(false);
   const [showThreads, setShowThreads] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -71,32 +72,34 @@ export default function ChatScreen({
 
   const submit = async () => {
     const value = text.trim();
-    if ((!value && !attachment) || running) return;
+    if ((!value && !attachment) || running || processingAttachment) return;
+    setProcessingAttachment(true);
     let finalText: string;
-    if (attachment?.kind === 'image') {
-      try {
+    try {
+      if (attachment?.kind === 'image') {
         if (settings.ocrEnabled === false) throw new Error('请在设置里开启 OCR 识图');
         const ocrText = await recognizeImage(settings, attachment);
         finalText = value
           ? `${value}\n\n[图片 OCR 结果]\n${ocrText}`
           : `请处理这张图片，OCR 结果如下：\n${ocrText}`;
-      } catch (error) {
-        setAttachError(error instanceof Error ? error.message : 'OCR 识别失败');
-        return;
+      } else {
+        const filePart = attachment
+          ? `\n\n[手机附件：${attachment.name}（${attachment.size} 字节）]\n\n${attachment.content}`
+          : '';
+        finalText = value ? `${value}${filePart}` : `请处理这个手机文件：${filePart}`;
       }
-    } else {
-      const filePart = attachment
-        ? `\n\n[手机附件：${attachment.name}（${attachment.size} 字节）]\n\n${attachment.content}`
-        : '';
-      finalText = value ? `${value}${filePart}` : `请处理这个手机文件：${filePart}`;
+      onSend(finalText, deep);
+      setText('');
+      setAttachment(null);
+      setAttachError('');
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+      });
+    } catch (error) {
+      setAttachError(error instanceof Error ? error.message : '处理附件失败');
+    } finally {
+      setProcessingAttachment(false);
     }
-    onSend(finalText, deep);
-    setText('');
-    setAttachment(null);
-    setAttachError('');
-    requestAnimationFrame(() => {
-      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-    });
   };
 
   const pickFile = async () => {
@@ -124,7 +127,7 @@ export default function ChatScreen({
           <button
             className="icon-button"
             onClick={() => setShowThreads(true)}
-            disabled={running}
+            disabled={running || processingAttachment}
             aria-label="切换对话"
             title="切换对话"
           >
@@ -175,6 +178,7 @@ export default function ChatScreen({
           </div>
         )}
         {attachError && <div className="attach-error">{attachError}</div>}
+        {processingAttachment && <div className="attach-pending">正在处理附件…</div>}
         <div className="mode-row">
           <button className={`mode-segment ${!deep ? 'active' : ''}`} onClick={() => setDeep(false)}>
             快速
@@ -187,7 +191,7 @@ export default function ChatScreen({
           <button
             className="attach-button"
             onClick={pickFile}
-            disabled={running}
+            disabled={running || processingAttachment}
             aria-label="发送文件"
             title="发送文件"
           >
@@ -202,7 +206,7 @@ export default function ChatScreen({
                 submit();
               }
             }}
-            placeholder={running ? 'Agent 正在执行…' : '输入任务…'}
+            placeholder={processingAttachment ? '正在处理附件…' : running ? 'Agent 正在执行…' : '输入任务…'}
             rows={1}
             aria-label="任务输入"
           />
@@ -211,7 +215,7 @@ export default function ChatScreen({
               <CircleStop size={21} />
             </button>
           ) : (
-            <button className="send-button" onClick={submit} aria-label="发送" title="发送" disabled={!text.trim() && !attachment}>
+            <button className="send-button" onClick={submit} aria-label="发送" title="发送" disabled={processingAttachment || (!text.trim() && !attachment)}>
               <Send size={19} />
             </button>
           )}

@@ -650,6 +650,12 @@ button:disabled {
   font-size: 12px;
 }
 
+.attach-pending {
+  margin-bottom: 8px;
+  color: var(--mint);
+  font-size: 12px;
+}
+
 .mode-row {
   display: flex;
   gap: 0;

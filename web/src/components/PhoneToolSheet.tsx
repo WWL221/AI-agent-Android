@@ -34,7 +34,7 @@ export default function PhoneToolSheet({ request, busy, onPick, onCancel }: Prop
           <p>内容只会发送给当前配置的模型服务，由你手动选择。</p>
         </div>
         <div className="approval-actions">
-          <button className="deny-button" onClick={() => onCancel(request.requestId)} disabled={busy}>
+          <button className="deny-button" onClick={() => onCancel(request.requestId)}>
             <X size={18} />
             取消
           </button>

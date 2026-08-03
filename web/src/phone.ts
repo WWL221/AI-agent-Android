@@ -59,31 +59,45 @@ export function pickPhoneFile(kind: 'text' | 'image' | 'any' = 'text'): Promise<
     input.accept = kind === 'text' ? textAccept : kind === 'image' ? imageAccept : `${textAccept},${imageAccept}`;
     input.style.display = 'none';
     document.body.appendChild(input);
-    const cleanup = () => input.remove();
+    let settled = false;
+    const cleanup = () => {
+      input.onchange = null;
+      input.oncancel = null;
+      input.remove();
+    };
+    const finishReject = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error);
+    };
+    const finishResolve = (file: PhoneFile) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(file);
+    };
+    input.oncancel = () => finishReject(new Error('未选择文件'));
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) {
-        cleanup();
-        reject(new Error('未选择文件'));
+        finishReject(new Error('未选择文件'));
         return;
       }
       if (file.size > 5 * 1024 * 1024) {
-        cleanup();
-        reject(new Error('文件超过 5MB，暂不支持'));
+        finishReject(new Error('文件超过 5MB，暂不支持'));
         return;
       }
       try {
         const isImage =
           file.type.startsWith('image/') || /\.(png|jpe?g|webp|bmp|gif)$/i.test(file.name);
         if (kind === 'image' && !isImage) {
-          cleanup();
-          reject(new Error('请选择图片文件'));
+          finishReject(new Error('请选择图片文件'));
           return;
         }
         if (isImage) {
           const dataUrl = await readFileAsDataURL(file);
-          cleanup();
-          resolve({
+          finishResolve({
             name: file.name,
             size: file.size,
             content: '[图片附件]',
@@ -94,11 +108,9 @@ export function pickPhoneFile(kind: 'text' | 'image' | 'any' = 'text'): Promise<
           return;
         }
         const content = await file.text();
-        cleanup();
-        resolve({ name: file.name, size: file.size, content, kind: 'text' });
+        finishResolve({ name: file.name, size: file.size, content, kind: 'text' });
       } catch {
-        cleanup();
-        reject(new Error('无法读取该文件，可能不是文本文件'));
+        finishReject(new Error('无法读取该文件，可能不是文本文件'));
       }
     };
     input.click();

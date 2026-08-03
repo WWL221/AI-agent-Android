@@ -763,7 +763,7 @@ export async function recognizeImage(settings: Settings, image: PhoneFile): Prom
     settings.ocrPrompt?.trim() ||
     '请识别这张图片中的所有文字，保持原文顺序，直接输出识别到的文字内容。';
   if (!apiKey) throw new Error('未填写 API Key，无法使用 OCR');
-  const response = await nativeRequest(
+  const request = nativeRequest(
     'POST',
     `${baseUrl}/chat/completions`,
     {
@@ -787,6 +787,10 @@ export async function recognizeImage(settings: Settings, image: PhoneFile): Prom
     undefined,
     settings.proxyUrl
   );
+  const timeout = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error('OCR 识别超时，请稍后重试')), 45000);
+  });
+  const response = await Promise.race([request, timeout]);
   if (!response.ok) {
     const detail =
       ((response.data as { error?: { message?: string } })?.error?.message) ||
