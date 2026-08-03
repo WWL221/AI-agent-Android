@@ -13,6 +13,7 @@ interface FileAccessPlugin {
   openSettings: () => Promise<void>;
   list: (options: { path: string }) => Promise<{ entries: FileEntry[] }>;
   read: (options: { path: string }) => Promise<{ content: string; size: number }>;
+  saveImage: (options: { path: string; base64: string }) => Promise<{ path: string; size: number }>;
 }
 
 const FileAccess = registerPlugin<FileAccessPlugin>('FileAccess');
@@ -42,4 +43,9 @@ export async function readAllFile(path: string): Promise<string> {
   if (!isNative()) throw new Error('仅支持安卓原生模式');
   const result = await FileAccess.read({ path: String(path) });
   return result.content || '';
+}
+
+export async function saveBase64Image(path: string, base64: string): Promise<{ path: string; size: number }> {
+  if (!isNative()) throw new Error('仅支持安卓原生模式');
+  return FileAccess.saveImage({ path: String(path), base64: String(base64) });
 }

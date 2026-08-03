@@ -7,6 +7,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
 import android.provider.Settings;
+import android.util.Base64;
 
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -18,6 +19,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
@@ -91,6 +93,33 @@ public class FileAccess extends Plugin {
       call.resolve(ret);
     } catch (Exception ex) {
       call.reject(ex.getMessage() == null ? "read file failed" : ex.getMessage());
+    }
+  }
+
+  @PluginMethod
+  public void saveImage(PluginCall call) {
+    String path = call.getString("path", "");
+    String base64 = call.getString("base64", "");
+    if (path.isEmpty() || base64.isEmpty()) {
+      call.reject("path and base64 are required");
+      return;
+    }
+    try {
+      File root = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS);
+      File file = new File(root, path);
+      if (!file.getParentFile().exists()) {
+        file.getParentFile().mkdirs();
+      }
+      byte[] bytes = Base64.decode(base64, Base64.DEFAULT);
+      try (FileOutputStream output = new FileOutputStream(file)) {
+        output.write(bytes);
+      }
+      JSObject ret = new JSObject();
+      ret.put("path", file.getAbsolutePath());
+      ret.put("size", bytes.length);
+      call.resolve(ret);
+    } catch (Exception ex) {
+      call.reject(ex.getMessage() == null ? "save image failed" : ex.getMessage());
     }
   }
 

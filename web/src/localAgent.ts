@@ -1,6 +1,6 @@
 import { CapacitorHttp, registerPlugin } from '@capacitor/core';
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
-import { hasAllFilesAccess, listAllFiles, readAllFile } from './fileAccess';
+import { hasAllFilesAccess, listAllFiles, readAllFile, saveBase64Image } from './fileAccess';
 import { getPhoneInfo, isNative, type PhoneFile } from './phone';
 import {
   clickPhone,
@@ -118,6 +118,20 @@ const LOCAL_TOOLS = [
         properties: {
           hint: { type: 'string', description: '想识别哪张图片以及用途' }
         }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'generate_image',
+      description: '根据文字描述生成一张图片，并保存到手机 Documents/PocketAgentImages。',
+      parameters: {
+        type: 'object',
+        properties: {
+          prompt: { type: 'string', description: '图片描述，越具体越好' }
+        },
+        required: ['prompt']
       }
     }
   },
@@ -803,6 +817,54 @@ export async function recognizeImage(settings: Settings, image: PhoneFile): Prom
   return text.trim();
 }
 
+export async function generateImage(settings: Settings, prompt: string): Promise<string> {
+  const baseUrl = (settings.imageGenBaseUrl || settings.apiBaseUrl).trim().replace(/\/+$/, '');
+  const apiKey = settings.imageGenApiKey || settings.apiKey;
+  const model =
+    settings.imageGenModel ||
+    (baseUrl.includes('openai') ? 'gpt-image-1' : baseUrl.includes('bigmodel') ? 'cogview-4' : 'gpt-image-1');
+  if (!apiKey) throw new Error('未填写 API Key，无法使用画图工具');
+  if (!prompt?.trim()) throw new Error('请提供图片描述');
+
+  const request = nativeRequest(
+    'POST',
+    `${baseUrl}/images/generations`,
+    {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`
+    },
+    {
+      model,
+      prompt: String(prompt),
+      n: 1,
+      size: settings.imageGenSize || '1024x1024',
+      response_format: 'b64_json'
+    },
+    undefined,
+    settings.proxyUrl
+  );
+  const timeout = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error('画图请求超时，请稍后重试')), 90000);
+  });
+  const response = await Promise.race([request, timeout]);
+  if (!response.ok) {
+    const detail =
+      ((response.data as { error?: { message?: string } })?.error?.message) ||
+      response.text.slice(0, 400);
+    throw new Error(`画图接口返回 ${response.status}: ${detail}`);
+  }
+  const data = response.data as {
+    data?: Array<{ b64_json?: string; url?: string }>;
+  };
+  const b64 = data.data?.[0]?.b64_json;
+  if (!b64) throw new Error('画图服务没有返回图片数据，请检查模型是否支持 b64_json');
+
+  const safe = String(prompt).replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 30) || 'image';
+  const fileName = `PocketAgentImages/${safe}-${Date.now()}.png`;
+  const saved = await saveBase64Image(fileName, b64);
+  return `已生成图片并保存到 Documents/${fileName}（${(saved.size / 1024).toFixed(1)} KB）`;
+}
+
 async function searchBing(query: string, proxyUrl = ''): Promise<string> {
   const response = await nativeRequest(
     'GET',
@@ -1021,6 +1083,9 @@ async function executeLocalTool(name: string, args: Record<string, unknown>, set
     case 'phone_type':
       await assertPhoneControl(settings);
       return (await typePhoneText(String(args.text || ''))) ? '输入成功' : '输入失败，请先聚焦输入框';
+    case 'generate_image':
+      if (settings.imageGenEnabled !== true) throw new Error('画图工具已在设置中关闭，请在设置→画图工具中开启');
+      return generateImage(settings, String(args.prompt || ''));
     case 'create_task': {
       if (!tasksEnabled) throw new Error('本地任务已在设置中关闭');
       const task = createLocalTask({ title: String(args.title || ''), notes: String(args.notes || '') });

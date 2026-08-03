@@ -9,6 +9,7 @@ import {
   Database,
   Download,
   Info,
+  Image as ImageIcon,
   Keyboard,
   MessageSquare,
   MousePointerClick,
@@ -66,6 +67,7 @@ type SheetId =
   | 'phonecontrol'
   | 'search'
   | 'ocr'
+  | 'imagegen'
   | 'mcp'
   | 'worldbook'
   | 'quickphrases'
@@ -564,6 +566,71 @@ export default function SettingsScreen({
         </SettingsSheet>
       );
     }
+    if (sheet === 'imagegen') {
+      return (
+        <SettingsSheet title="画图工具" onClose={() => setSheet(null)}>
+          <label className="sheet-toggle">
+            <span>
+              <strong>启用画图工具</strong>
+              <small>允许 Agent 根据描述生成图片并保存到手机</small>
+            </span>
+            <input
+              type="checkbox"
+              checked={draft.imageGenEnabled}
+              onChange={(event) => setDraft({ ...draft, imageGenEnabled: event.target.checked })}
+            />
+          </label>
+          <label className="sheet-field">
+            <span>API 基础地址</span>
+            <input
+              value={draft.imageGenBaseUrl}
+              onChange={(event) => setDraft({ ...draft, imageGenBaseUrl: event.target.value })}
+              placeholder="留空则使用当前模型服务商"
+              inputMode="url"
+            />
+          </label>
+          <label className="sheet-field">
+            <span>API Key</span>
+            <input
+              value={draft.imageGenApiKey}
+              onChange={(event) => setDraft({ ...draft, imageGenApiKey: event.target.value })}
+              placeholder="留空则使用当前 API Key"
+              type="text"
+              autoComplete="off"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+            />
+          </label>
+          <label className="sheet-field">
+            <span>生成模型</span>
+            <input
+              value={draft.imageGenModel}
+              onChange={(event) => setDraft({ ...draft, imageGenModel: event.target.value })}
+              placeholder="例如 gpt-image-1、cogview-4"
+            />
+          </label>
+          <label className="sheet-field">
+            <span>图片尺寸</span>
+            <select
+              className="sheet-select"
+              value={draft.imageGenSize}
+              onChange={(event) => setDraft({ ...draft, imageGenSize: event.target.value })}
+            >
+              {['1024x1024', '1024x1792', '1792x1024', '768x768', '512x512'].map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button className="primary-button kelivo-save" onClick={save}>
+            <Save size={17} />
+            保存设置
+          </button>
+        </SettingsSheet>
+      );
+    }
     if (sheet === 'mcp') {
       const servers: McpServer[] = Array.isArray(draft.mcpServers) ? draft.mcpServers : [];
       const updateServer = (id: string, patch: Partial<McpServer>) =>
@@ -885,6 +952,17 @@ export default function SettingsScreen({
                 <small>识别图片中的文字</small>
               </span>
               <span className="kelivo-row-value">{draft.ocrEnabled ? (draft.ocrModel || draft.model) : '未启用'}</span>
+              <ChevronRight size={17} />
+            </button>
+            <button className="kelivo-row" onClick={() => setSheet('imagegen')}>
+              <span className="kelivo-row-icon">
+                <ImageIcon size={18} />
+              </span>
+              <span className="kelivo-row-copy">
+                <strong>画图工具</strong>
+                <small>AI 生成图片并保存到手机</small>
+              </span>
+              <span className="kelivo-row-value">{draft.imageGenEnabled ? (draft.imageGenModel || '已启用') : '未启用'}</span>
               <ChevronRight size={17} />
             </button>
             <button className="kelivo-row" onClick={() => setSheet('mcp')}>

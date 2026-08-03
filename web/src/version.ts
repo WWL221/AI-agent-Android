@@ -1,4 +1,4 @@
-export const APP_VERSION = '0.1.10';
+export const APP_VERSION = '0.1.11';
 
 export interface ReleaseNote {
   version: string;
@@ -7,6 +7,11 @@ export interface ReleaseNote {
 }
 
 export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: '0.1.11',
+    date: '2026-08-03',
+    notes: ['新增画图工具：支持 OpenAI 兼容图片生成接口，生成图片保存到手机']
+  },
   {
     version: '0.1.10',
     date: '2026-08-03',

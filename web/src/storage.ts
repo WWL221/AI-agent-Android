@@ -64,6 +64,11 @@ export function defaultSettings(): Settings {
     ocrApiKey: '',
     ocrModel: 'qwen-vl-max',
     ocrPrompt: '请识别这张图片中的所有文字，保持原文顺序，直接输出识别到的文字内容。',
+    imageGenEnabled: false,
+    imageGenBaseUrl: '',
+    imageGenApiKey: '',
+    imageGenModel: '',
+    imageGenSize: '1024x1024',
     profiles: [profile],
     activeProfileId: profile.id
   };

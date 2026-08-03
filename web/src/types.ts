@@ -77,6 +77,11 @@ export interface Settings {
   ocrApiKey: string;
   ocrModel: string;
   ocrPrompt: string;
+  imageGenEnabled: boolean;
+  imageGenBaseUrl: string;
+  imageGenApiKey: string;
+  imageGenModel: string;
+  imageGenSize: string;
   profiles: ModelProfile[];
   activeProfileId: string;
 }
