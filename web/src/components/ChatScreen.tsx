@@ -146,8 +146,8 @@ export default function ChatScreen({
               <span className="sigil-caret">›</span>
               <span className="sigil-cursor" />
             </div>
-            <h2>把任务交给手机里的 Agent</h2>
-            <p>它会搜索资料、管理任务、读写工作区文件，危险操作会先征求你的批准。</p>
+            <h2>我是灰风，来自 L 星团的纳米机械生命</h2>
+            <p>我可以搜索资料、管理任务、读写文件；危险操作会先征求你的批准。</p>
             <div className="suggestion-list">
               {suggestions.map((suggestion) => (
                 <button

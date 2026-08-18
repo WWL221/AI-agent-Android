@@ -613,7 +613,7 @@ export default function App() {
           </span>
           <div>
             <strong>灰风</strong>
-            <small>Agent on Android</small>
+            <small>灰风 · 手机 AI Agent</small>
           </div>
         </div>
         <button className="rail-new" onClick={handleNewThread} disabled={Boolean(runRef.current)}>
