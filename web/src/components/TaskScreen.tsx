@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlarmClock, CalendarClock, Check, Circle, CircleStop, ListTodo, Play, Plus, Power, RefreshCw, Trash2 } from 'lucide-react';
+import { AlarmClock, CalendarClock, Check, Circle, CircleStop, ListTodo, Play, Plus, Power, RefreshCw, Search, Trash2, X } from 'lucide-react';
 import { createTask, deleteTask, patchTask } from '../api';
 import { createLocalTask, deleteLocalTask, updateLocalTask } from '../localTasks';
 import {
   cancelNativeScheduledAction,
+  listPhoneApps,
   openPhoneApp,
   resolvePhoneAppPackage,
-  scheduleNativeOpenApp
+  scheduleNativeOpenApp,
+  type PhoneAppInfo
 } from '../phoneControl';
 import {
   createScheduledAction,
@@ -52,6 +54,12 @@ export default function TaskScreen({ settings, tasks, setTasks, error, running, 
   const [actionTime, setActionTime] = useState('08:00');
   const [actionBusy, setActionBusy] = useState(false);
   const [actionError, setActionError] = useState('');
+    const [actionPackageName, setActionPackageName] = useState('');
+    const [appPickerOpen, setAppPickerOpen] = useState(false);
+    const [appList, setAppList] = useState<PhoneAppInfo[]>([]);
+    const [appSearch, setAppSearch] = useState('');
+    const [appLoading, setAppLoading] = useState(false);
+    const [appError, setAppError] = useState('');
   const titleRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -144,6 +152,28 @@ export default function TaskScreen({ settings, tasks, setTasks, error, running, 
     }
   };
 
+  const openAppPicker = async () => {
+    setAppPickerOpen(true);
+    setAppSearch('');
+    setAppLoading(true);
+    setAppError('');
+    try {
+      const apps = await listPhoneApps();
+      setAppList([...apps].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN')));
+    } catch (err) {
+      setAppError(err instanceof Error ? err.message : '无法读取应用列表');
+      setAppList([]);
+    } finally {
+      setAppLoading(false);
+    }
+  };
+
+  const chooseApp = (app: PhoneAppInfo) => {
+    setActionTarget(app.name);
+    setActionPackageName(app.packageName);
+    setAppPickerOpen(false);
+  };
+
   const addAction = async () => {
     const target = actionTarget.trim();
     if (!target) {
@@ -161,7 +191,7 @@ export default function TaskScreen({ settings, tasks, setTasks, error, running, 
         name: actionName.trim(),
         type: actionType,
         target,
-        packageName: undefined,
+          packageName: actionPackageName || undefined,
         mode: actionMode,
         date: actionMode === 'once' ? actionDate : '',
         time: actionTime || '08:00',
@@ -173,6 +203,7 @@ export default function TaskScreen({ settings, tasks, setTasks, error, running, 
       setShowAddAction(false);
       setActionName('');
       setActionTarget('');
+        setActionPackageName('');
       setActionMode('daily');
       setActionTime('08:00');
     } catch (err) {
@@ -217,6 +248,10 @@ export default function TaskScreen({ settings, tasks, setTasks, error, running, 
 
   const visibleTasks = tasks.filter((task) => task.title.trim());
   const doneCount = visibleTasks.filter((task) => task.status === 'done').length;
+  const normalizedAppSearch = appSearch.trim().toLowerCase();
+  const filteredApps = normalizedAppSearch
+    ? appList.filter((app) => app.name.toLowerCase().includes(normalizedAppSearch) || app.packageName.toLowerCase().includes(normalizedAppSearch))
+    : appList;
 
   return (
     <section className="task-screen">
@@ -332,12 +367,25 @@ export default function TaskScreen({ settings, tasks, setTasks, error, running, 
                 <option value="create_task">创建任务</option>
                 <option value="send_message">发送消息</option>
               </select>
-              <input
-                value={actionTarget}
-                onChange={(event) => setActionTarget(event.target.value)}
-                placeholder={actionType === 'open_app' ? '应用名或包名，例如 微信 / com.tencent.mm' : actionType === 'create_task' ? '要创建的任务标题' : '要发送给 Agent 的消息'}
-                aria-label="行动目标"
-              />
+                {actionType === 'open_app' ? (
+                  <div className="app-pick-field">
+                    <button type="button" className="app-pick-button" onClick={openAppPicker} aria-label="选择应用">
+                      {actionTarget ? `${actionTarget}${actionPackageName ? ` (${actionPackageName})` : ''}` : '选择要打开的应用…'}
+                    </button>
+                    {actionTarget && (
+                      <button type="button" className="app-pick-clear" onClick={() => { setActionTarget(''); setActionPackageName(''); }} aria-label="清除选择">
+                        清除
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <input
+                    value={actionTarget}
+                    onChange={(event) => setActionTarget(event.target.value)}
+                    placeholder={actionType === 'create_task' ? '要创建的任务标题' : '要发送给 Agent 的消息'}
+                    aria-label="行动目标"
+                  />
+                )}
               <select
                 value={actionMode}
                 onChange={(event) => setActionMode(event.target.value as ScheduledActionMode)}
@@ -405,6 +453,44 @@ export default function TaskScreen({ settings, tasks, setTasks, error, running, 
           </div>
         </div>
       </div>
+      {appPickerOpen && (
+        <div className="sheet-backdrop" onClick={() => setAppPickerOpen(false)}>
+          <div className="app-picker-sheet" onClick={(event) => event.stopPropagation()}>
+            <div className="app-picker-head">
+              <div className="app-picker-title">
+                <Search size={18} />
+                <h3>选择要打开的应用</h3>
+              </div>
+              <button className="icon-button" onClick={() => setAppPickerOpen(false)} aria-label="关闭选择器">
+                <X size={18} />
+              </button>
+            </div>
+            <input
+              className="app-picker-search"
+              value={appSearch}
+              onChange={(event) => setAppSearch(event.target.value)}
+              placeholder="搜索应用名称或包名…"
+              autoFocus
+            />
+            {appLoading ? (
+              <div className="app-picker-empty">正在读取应用列表…</div>
+            ) : appError ? (
+              <div className="app-picker-empty app-picker-error">{appError}</div>
+            ) : filteredApps.length === 0 ? (
+              <div className="app-picker-empty">没有找到应用</div>
+            ) : (
+              <div className="app-picker-list">
+                {filteredApps.map((app) => (
+                  <button key={app.packageName} className="app-picker-item" onClick={() => chooseApp(app)}>
+                    <span className="app-picker-name">{app.name}</span>
+                    <small>{app.packageName}</small>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </section>
   );
 }

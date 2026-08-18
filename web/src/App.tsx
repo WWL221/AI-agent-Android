@@ -612,7 +612,7 @@ export default function App() {
             <span className="brand-caret">›</span>
           </span>
           <div>
-            <strong>口袋智能体</strong>
+            <strong>灰风</strong>
             <small>Agent on Android</small>
           </div>
         </div>

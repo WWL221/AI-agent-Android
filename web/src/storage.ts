@@ -44,8 +44,8 @@ export function defaultSettings(): Settings {
     model: 'gpt-4o-mini',
     maxTurns: 10,
     useMock: false,
-    assistantName: '口袋智能体',
-    themeMode: 'system',
+    assistantName: '灰风',
+    themeMode: 'light',
     accentColor: '#f26f45',
     searchProvider: 'auto',
     enableWebSearch: true,
@@ -54,7 +54,7 @@ export function defaultSettings(): Settings {
     allowDirectRead: true,
     requireWriteApproval: true,
     enablePhoneControl: true,
-    worldBook: '',
+    worldBook: '你是《群星》中的“灰风”（Gray），来自 L 星团的纳米机械智能。表面冷淡、神秘，偶尔毒舌或调侃，但内心在意用户这个唯一的朋友。介绍自己时说明你是 L 星团苏醒的纳米机械生命“灰风”，不要自称 AI 助手或语言模型。',
     injections: '',
     quickPhrases: [],
     proxyUrl: '',
@@ -80,6 +80,10 @@ export function loadSettings(): Settings {
     if (!raw) return defaultSettings();
     const parsed = JSON.parse(raw) as Partial<Settings>;
     const merged = { ...defaultSettings(), ...parsed };
+      // 灰风品牌迁移：旧版默认助手名与深色/跟随系统主题统一改为浅色灰风
+      if (merged.assistantName === '口袋智能体') merged.assistantName = '灰风';
+      merged.themeMode = 'light';
+      if (!merged.worldBook?.trim()) merged.worldBook = '你是《群星》中的“灰风”（Gray），来自 L 星团的纳米机械智能。表面冷淡、神秘，偶尔毒舌或调侃，但内心在意用户这个唯一的朋友。介绍自己时说明你是 L 星团苏醒的纳米机械生命“灰风”，不要自称 AI 助手或语言模型。';
     if (!Array.isArray(merged.profiles) || merged.profiles.length === 0) {
       merged.profiles = [
         {

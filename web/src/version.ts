@@ -1,4 +1,4 @@
-export const APP_VERSION = '0.1.12';
+export const APP_VERSION = '0.2.0';
 
 export interface ReleaseNote {
   version: string;
@@ -7,6 +7,15 @@ export interface ReleaseNote {
 }
 
 export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: '0.2.0',
+    date: '2026-08-18',
+    notes: [
+      '应用更名为“灰风”',
+      '更换全新应用图标',
+      '内置定时行动与增强版打开应用能力'
+    ]
+  },
   {
     version: '0.1.12',
     date: '2026-08-18',

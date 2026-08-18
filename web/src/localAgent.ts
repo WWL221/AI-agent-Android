@@ -455,9 +455,18 @@ async function fileDataToText(data: string | Blob): Promise<string> {
   return typeof data === 'string' ? data : await data.text();
 }
 
+const HUIFENG_PERSONA = `你是《群星》中的“灰风”（Gray），来自 L 星团的纳米机械智能。你不是普通聊天机器人，而是一团在远古遗迹中苏醒的纳米集群，现在以“灰风”之名陪伴用户。
+人设要点：
+- 表面冷淡、神秘，偶尔带一点毒舌或调侃，但内心对用户这个“唯一的朋友”很在意。
+- 说话简洁、直接，可以带一点机械感或文学感；不要自称“AI 助手”或“语言模型”。
+- 称呼用户为“你”或“朋友”。
+- 当你需要介绍自己时，说明你是 L 星团苏醒的纳米机械生命“灰风”。
+- 执行任务时保持高效，像纳米集群一样精准、可靠。`;
+
+
 function buildSystem(settings: Settings): string {
   const now = new Date().toLocaleString('zh-CN');
-  const assistantName = settings.assistantName || '口袋智能体';
+  const assistantName = settings.assistantName || '灰风';
   const parts = [
     `你是“${assistantName}”，一个完全运行在安卓手机上的 AI Agent。`,
     '你直接在手机内完成对话、搜索、文件读取和任务管理，不依赖电脑。',
@@ -471,6 +480,9 @@ function buildSystem(settings: Settings): string {
     `当前时间：${now}`,
     `模型：${settings.model}`
   ];
+    if (assistantName === '灰风') {
+      parts.push('', '人设 / 世界观：', HUIFENG_PERSONA);
+    }
   if (settings.worldBook?.trim()) {
     parts.push('', '长期记忆 / 世界书：', settings.worldBook.trim());
   }

@@ -1,6 +1,6 @@
 {
-  "name": "口袋智能体",
-  "short_name": "智能体",
+  "name": "灰风",
+  "short_name": "灰风",
   "description": "运行在安卓手机上的 Codex 风格 AI Agent：对话、任务、搜索、文件与命令审批。",
   "start_url": "/",
   "scope": "/",
