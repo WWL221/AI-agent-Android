@@ -11,6 +11,7 @@ import {
   phoneKey,
   scrollPhone,
   typePhoneText,
+  type PhoneAppInfo,
   type UiNode
 } from './phoneControl';
 import { createLocalTask, deleteLocalTask, listLocalTasks, updateLocalTask } from './localTasks';
@@ -57,6 +58,80 @@ interface ProxyHttpResponse {
 const ProxyHttp = registerPlugin<{ request: (options: ProxyHttpRequestOptions) => Promise<ProxyHttpResponse> }>(
   'ProxyHttp'
 );
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, Math.max(0, ms)));
+
+const APP_ALIASES: Record<string, string[]> = {
+  微信: ['wechat', 'weixin', 'weixin'],
+  设置: ['settings', '系统设置'],
+  相机: ['camera', '拍照'],
+  浏览器: ['browser', 'chrome', 'edge', 'firefox', 'safari'],
+  支付宝: ['alipay', 'zhifubao'],
+  淘宝: ['taobao', '手机淘宝'],
+  京东: ['jd', 'jingdong'],
+  拼多多: ['pinduoduo', 'pdd'],
+  哔哩哔哩: ['bilibili', 'b站', 'bili'],
+  抖音: ['douyin', 'tiktok'],
+  快手: ['kuaishou', 'kwai'],
+  QQ: ['qq', 'tencent qq'],
+  钉钉: ['dingtalk', 'dingding'],
+  企业微信: ['wecom', 'wechat work', 'wework'],
+  飞书: ['feishu', 'lark'],
+  网易云音乐: ['netease music', 'cloudmusic'],
+  QQ音乐: ['qqmusic', 'qq music'],
+  高德地图: ['amap', 'gaode', '高德'],
+  百度地图: ['baidu map', 'ditu'],
+  谷歌地图: ['google maps', 'googlemap'],
+  YouTube: ['youtube', '优兔'],
+  Telegram: ['telegram', 'tg'],
+  Spotify: ['spotify', '声田'],
+  Steam: ['steam', '蒸汽平台'],
+  Chrome: ['google chrome', '浏览器'],
+  Safari: ['safari']
+};
+
+function normalizeAppName(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_\-—–（）()【】[\].,，。:：;；/\\]+/g, '');
+}
+
+function appMatchScore(app: PhoneAppInfo, query: string): number {
+  const q = normalizeAppName(query);
+  if (!q) return 0;
+  const name = normalizeAppName(app.name);
+  const pkg = normalizeAppName(app.packageName);
+  if (name === q || pkg === q || pkg.endsWith('.' + q)) return 100;
+  if (name.startsWith(q) || pkg.startsWith(q) || pkg.endsWith(q)) return 80;
+  if (name.includes(q) || pkg.includes(q)) return 60;
+  return 0;
+}
+
+function resolveAppPackage(appName: string, apps: PhoneAppInfo[]): { packageName: string; name: string } | null {
+  const trimmed = appName.trim();
+  if (!trimmed) return null;
+  const scored = apps
+    .map((app) => ({ app, score: appMatchScore(app, trimmed) }))
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score || a.app.name.localeCompare(b.app.name));
+  if (scored.length > 0) return { packageName: scored[0].app.packageName, name: scored[0].app.name };
+
+  const q = normalizeAppName(trimmed);
+  for (const [canonical, aliases] of Object.entries(APP_ALIASES)) {
+    const aliasMatch = aliases.some((alias) => q === normalizeAppName(alias) || q.includes(normalizeAppName(alias)));
+    if (q === normalizeAppName(canonical) || aliasMatch) {
+      const found = apps.find(
+        (app) =>
+          normalizeAppName(app.name).includes(normalizeAppName(canonical)) ||
+          normalizeAppName(app.packageName).includes(normalizeAppName(canonical))
+      );
+      if (found) return { packageName: found.packageName, name: found.name };
+    }
+  }
+  return null;
+}
+
 
 const LOCAL_TOOLS = [
   {
@@ -203,14 +278,30 @@ const LOCAL_TOOLS = [
     type: 'function',
     function: {
       name: 'phone_open_app',
-      description: '打开一个手机 App，可以填应用名称或包名。',
+      description: '打开一个手机 App，可以填应用名称或包名。支持智能匹配应用名，打开后可等待应用启动完成。',
       parameters: {
         type: 'object',
         properties: {
           name: { type: 'string', description: '应用名称，例如 微信、设置' },
-          packageName: { type: 'string', description: 'App 包名，例如 com.tencent.mm' }
+          packageName: { type: 'string', description: 'App 包名，例如 com.tencent.mm' },
+          waitMs: { type: 'number', description: '可选，打开后等待多少毫秒再继续，默认 800，适合等待应用启动' },
+          delay: { type: 'number', description: 'waitMs 的别名，两者都传时以 waitMs 为准' }
         },
         required: []
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'phone_wait',
+      description: '等待指定的毫秒数后再继续，用于 App 启动、页面加载等需要延时的场景。',
+      parameters: {
+        type: 'object',
+        properties: {
+          ms: { type: 'number', description: '等待毫秒数，例如 2000 表示等待 2 秒' }
+        },
+        required: ['ms']
       }
     }
   },
@@ -1034,7 +1125,7 @@ async function executeLocalTool(name: string, args: Record<string, unknown>, set
       await assertPhoneControl(settings);
       return summarizeUiTree(await getPhoneUiTree()).join('\n') || '（屏幕没有可操作元素）';
     case 'phone_apps': {
-      await assertPhoneControl(settings);
+        if (settings.enablePhoneControl !== true) throw new Error('手机控制已在设置中关闭');
       const query = String(args.query || args.keyword || '').toLowerCase();
       const allApps = await listPhoneApps();
       const apps = query
@@ -1063,22 +1154,28 @@ async function executeLocalTool(name: string, args: Record<string, unknown>, set
     case 'phone_key':
       await assertPhoneControl(settings);
       return (await phoneKey(String(args.action || 'back') as 'back')) ? `已执行 ${args.action || 'back'}` : '按键执行失败';
+    case 'phone_wait': {
+      const waitMs = Math.max(0, Number(args.ms || args.delay || 0));
+      await sleep(waitMs);
+      return `已等待 ${waitMs}ms`;
+    }
     case 'phone_open_app': {
-      await assertPhoneControl(settings);
-      let pkg = String(args.packageName || '');
+        if (settings.enablePhoneControl !== true) throw new Error('手机控制已在设置中关闭');
       const appName = String(args.name || args.app || '');
+      let pkg = String(args.packageName || '');
+      let matchedName = appName;
       if (!pkg && appName) {
         const apps = await listPhoneApps();
-        const lower = appName.toLowerCase();
-        const found =
-          apps.find((app) => app.name.toLowerCase().includes(lower)) ||
-          apps.find((app) => app.packageName.toLowerCase().includes(lower));
-        pkg = found ? found.packageName : '';
-        if (!pkg) return `没有找到应用：${appName}`;
+        const resolved = resolveAppPackage(appName, apps);
+        if (!resolved) return `没有找到应用：${appName}`;
+        pkg = resolved.packageName;
+        matchedName = resolved.name;
       }
-      return (await openPhoneApp(pkg))
-        ? `已打开 ${appName || pkg} (${pkg})`
-        : `无法打开 ${appName || pkg}`;
+      const waitMs = Math.max(0, Number(args.waitMs ?? args.delay ?? 800));
+      const ok = await openPhoneApp(pkg);
+      if (!ok) return `无法打开 ${appName || pkg}`;
+      if (waitMs > 0) await sleep(waitMs);
+      return `已打开 ${matchedName || pkg} (${pkg})，等待 ${waitMs}ms`;
     }
     case 'phone_type':
       await assertPhoneControl(settings);

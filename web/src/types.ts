@@ -103,6 +103,32 @@ export interface AgentTask {
   updatedAt: string;
 }
 
+export type ScheduledActionType = 'open_app' | 'create_task' | 'send_message';
+
+export type ScheduledActionMode = 'once' | 'daily';
+
+export interface ScheduledAction {
+  id: string;
+  name: string;
+  type: ScheduledActionType;
+  /** 打开应用时填应用名/包名；创建任务时填任务标题；发送消息时填要发送的内容 */
+  target: string;
+  /** 打开应用时可选：解析后的包名 */
+  packageName?: string;
+  mode: ScheduledActionMode;
+  /** 仅一次时使用，格式 YYYY-MM-DD */
+  date: string;
+  /** 格式 HH:mm */
+  time: string;
+  enabled: boolean;
+  /** 是否已在系统层用 AlarmManager 注册（仅 open_app） */
+  nativeScheduled?: boolean;
+  lastRunAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+
 export interface ServerConfig {
   model: string;
   baseUrl: string;

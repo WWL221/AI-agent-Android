@@ -11,7 +11,9 @@ import {
 import { loadSettings, loadThreads, saveSettings, saveThreads, uid } from './storage';
 import { getPhoneInfo, pickPhoneFile, pickPhoneImage } from './phone';
 import { recognizeImage, runLocalAgent, type PhoneFileRequest, type PhoneFileResult } from './localAgent';
-import { listLocalTasks } from './localTasks';
+import { createLocalTask, listLocalTasks } from './localTasks';
+import { getDueScheduledActions, markScheduledActionRun } from './scheduledActions';
+import { openPhoneApp, resolvePhoneAppPackage } from './phoneControl';
 import { applyTheme } from './theme';
 import type { AgentTask, Message, Settings, Thread, ToolCallRecord } from './types';
 import ChatScreen from './components/ChatScreen';
@@ -396,6 +398,34 @@ export default function App() {
     [patchThread, refreshTasks, settings, threads]
   );
 
+    useEffect(() => {
+      const timer = setInterval(() => {
+        const due = getDueScheduledActions();
+        for (const action of due) {
+          if (action.type === 'open_app' && action.nativeScheduled) continue;
+          void (async () => {
+            try {
+              if (action.type === 'open_app') {
+                const pkg = action.packageName || (await resolvePhoneAppPackage(action.target));
+                if (!pkg) return;
+                await openPhoneApp(pkg);
+              } else if (action.type === 'create_task') {
+                createLocalTask({ title: action.target });
+                refreshTasks();
+              } else if (action.type === 'send_message') {
+                sendMessage(action.target, false);
+              }
+              markScheduledActionRun(action.id);
+            } catch {
+              // 定时执行失败时保留记录，等待下一次检查。
+            }
+          })();
+        }
+      }, 10000);
+      return () => clearInterval(timer);
+    }, [refreshTasks, sendMessage]);
+
+
   const handleDecision = useCallback(
     async (decision: 'allow' | 'deny', remember: boolean) => {
       if (!pendingApproval) return;
@@ -631,6 +661,9 @@ export default function App() {
             onCancel={handleCancel}
             onRefresh={refreshTasks}
             onRunTask={handleRunTask}
+              onSendMessage={(text) => {
+                void sendMessage(text, false);
+              }}
           />
         )}
         {tab === 'settings' && (

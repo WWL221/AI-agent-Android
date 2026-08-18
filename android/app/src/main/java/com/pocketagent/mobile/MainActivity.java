@@ -9,6 +9,7 @@ public class MainActivity extends BridgeActivity {
     registerPlugin(ProxyHttp.class);
     registerPlugin(FileAccess.class);
     registerPlugin(AccessibilityControl.class);
+      registerPlugin(ScheduledAction.class);
     super.onCreate(savedInstanceState);
   }
 }

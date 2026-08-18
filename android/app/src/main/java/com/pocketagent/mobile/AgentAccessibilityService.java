@@ -3,6 +3,7 @@ package com.pocketagent.mobile;
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.GestureDescription;
 import android.content.Intent;
+import android.content.pm.ResolveInfo;
 import android.graphics.Path;
 import android.graphics.Rect;
 import android.os.Bundle;
@@ -14,6 +15,7 @@ import com.getcapacitor.JSObject;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.List;
 
 public class AgentAccessibilityService extends AccessibilityService {
   private static AgentAccessibilityService instance;
@@ -120,8 +122,19 @@ public class AgentAccessibilityService extends AccessibilityService {
 
   public boolean openApp(String packageName) {
     try {
+      if (packageName == null || packageName.trim().isEmpty()) return false;
       Intent launch = getPackageManager().getLaunchIntentForPackage(packageName);
-      if (launch == null) return false;
+      if (launch == null) {
+        Intent query = new Intent(Intent.ACTION_MAIN);
+        query.addCategory(Intent.CATEGORY_LAUNCHER);
+        query.setPackage(packageName);
+        List<ResolveInfo> resolves = getPackageManager().queryIntentActivities(query, 0);
+        if (resolves == null || resolves.isEmpty() || resolves.get(0).activityInfo == null) return false;
+        ResolveInfo info = resolves.get(0);
+        launch = new Intent(Intent.ACTION_MAIN);
+        launch.addCategory(Intent.CATEGORY_LAUNCHER);
+        launch.setClassName(info.activityInfo.packageName, info.activityInfo.name);
+      }
       launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
       startActivity(launch);
       return true;

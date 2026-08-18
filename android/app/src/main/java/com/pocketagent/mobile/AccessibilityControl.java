@@ -122,19 +122,27 @@ public class AccessibilityControl extends Plugin {
     });
   }
 
-  @PluginMethod
-  public void openApp(PluginCall call) {
-    mainHandler.post(() -> {
-      AgentAccessibilityService service = AgentAccessibilityService.getInstance();
-      if (service == null) {
-        call.reject("无障碍服务未连接");
-        return;
+    @PluginMethod
+    public void openApp(PluginCall call) {
+      mainHandler.post(() -> {
+        JSObject ret = new JSObject();
+        ret.put("ok", openAppDirect(call.getString("packageName", "")));
+        call.resolve(ret);
+      });
+    }
+
+    private boolean openAppDirect(String packageName) {
+      try {
+        if (packageName == null || packageName.trim().isEmpty()) return false;
+        Intent launch = getContext().getPackageManager().getLaunchIntentForPackage(packageName.trim());
+        if (launch == null) return false;
+        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        getContext().startActivity(launch);
+        return true;
+      } catch (Exception ex) {
+        return false;
       }
-      JSObject ret = new JSObject();
-      ret.put("ok", service.openApp(call.getString("packageName", "")));
-      call.resolve(ret);
-    });
-  }
+    }
 
   @PluginMethod
   public void listApps(PluginCall call) {

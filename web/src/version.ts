@@ -1,4 +1,4 @@
-export const APP_VERSION = '0.1.11';
+export const APP_VERSION = '0.1.12';
 
 export interface ReleaseNote {
   version: string;
@@ -7,6 +7,17 @@ export interface ReleaseNote {
 }
 
 export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: '0.1.12',
+    date: '2026-08-18',
+    notes: [
+      '加强打开应用能力：智能匹配应用名和常见别名',
+      '打开 App 后可配置等待时间，新增 phone_wait 延迟工具',
+        '原生打开应用增加 launcher Activity 兜底',
+        '新增定时行动：每天/单次定时打开应用、创建任务或发送消息',
+        '打开应用不再强制依赖无障碍服务'
+    ]
+  },
   {
     version: '0.1.11',
     date: '2026-08-03',
