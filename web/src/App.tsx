@@ -13,7 +13,7 @@ import { getPhoneInfo, pickPhoneFile, pickPhoneImage } from './phone';
 import { recognizeImage, runLocalAgent, type PhoneFileRequest, type PhoneFileResult } from './localAgent';
 import { listLocalTasks } from './localTasks';
 import { applyTheme } from './theme';
-import type { AgentTask, Message, Settings, Thread, ToolCallRecord } from './types';
+import type { AgentTask, Message, MessageAttachment, Settings, Thread, ToolCallRecord } from './types';
 import ChatScreen from './components/ChatScreen';
 import TaskScreen from './components/TaskScreen';
 import SettingsScreen from './components/SettingsScreen';
@@ -60,6 +60,7 @@ export default function App() {
   const runRef = useRef<{ controller: AbortController; runId: string; targetId: string } | null>(null);
   const localPhoneResolvers = useRef(new Map<string, (result: PhoneFileResult) => void>());
   const localApprovalResolvers = useRef(new Map<string, (decision: 'allow' | 'deny') => void>());
+  const localApprovalRemembered = useRef(false);
 
   useEffect(() => {
     activeIdRef.current = activeId;
@@ -123,9 +124,10 @@ export default function App() {
   );
 
   const sendMessage = useCallback(
-    async (text: string, deep: boolean) => {
+    async (text: string, deep: boolean, attachment?: MessageAttachment, displayText = '') => {
       const trimmed = text.trim();
       if (!trimmed || runRef.current) return;
+      const visibleText = displayText.trim() || (attachment ? '' : trimmed);
 
       const now = Date.now();
       let threadId = activeIdRef.current;
@@ -133,7 +135,7 @@ export default function App() {
 
       if (!threadId) {
         threadId = uid();
-        threadTitle = trimmed.slice(0, 26);
+        threadTitle = (visibleText || attachment?.name || trimmed).slice(0, 26);
         const thread: Thread = {
           id: threadId,
           title: threadTitle,
@@ -147,16 +149,17 @@ export default function App() {
         activeIdRef.current = threadId;
       } else {
         const current = threads.find((item) => item.id === threadId);
-        threadTitle = current?.title === '新对话' ? trimmed.slice(0, 26) : current?.title || '新对话';
+        threadTitle = current?.title === '新对话' ? (visibleText || attachment?.name || trimmed).slice(0, 26) : current?.title || '新对话';
       }
       const targetId = threadId;
 
       const userMessage: Message = {
         id: uid(),
         role: 'user',
-        content: trimmed,
+        content: visibleText,
         toolCalls: [],
-        createdAt: now
+        createdAt: now,
+        attachment
       };
       const assistantMessage: Message = {
         id: uid(),
@@ -198,6 +201,7 @@ export default function App() {
       setTab('chat');
       const controller = new AbortController();
       runRef.current = { controller, runId: '', targetId };
+      localApprovalRemembered.current = false;
 
       const patchRunThread = (updater: (thread: Thread) => Thread) => patchThread(targetId, updater);
       const patchRunAssistant = (messageId: string, updater: (message: Message) => Message) =>
@@ -214,8 +218,12 @@ export default function App() {
 
       const runMessages = threads
         .find((item) => item.id === targetId)
-        ?.messages.concat(userMessage)
-        .map((message) => ({ role: message.role, content: message.content })) ?? [{ role: 'user', content: trimmed }];
+        ?.messages.concat({ ...userMessage, content: trimmed })
+        .map((message) => ({
+          role: message.role,
+          content: message.content,
+          imageDataUrl: message.attachment?.kind === 'image' ? message.attachment?.dataUrl : undefined
+        })) ?? [{ role: 'user', content: trimmed }];
 
       const handleEvent = (event: AgentEvent) => {
         if (event.type === 'started') {
@@ -354,25 +362,27 @@ export default function App() {
             signal: controller.signal,
             requestPhoneFile,
             requestApproval: (request) =>
-              new Promise<'allow' | 'deny'>((resolve) => {
-                localApprovalResolvers.current.set(request.requestId, resolve);
-                setPendingApproval({
-                  requestId: request.requestId,
-                  toolId: request.toolId,
-                  name: request.name,
-                  summary: request.summary,
-                  detail: request.detail
-                });
-                patchRunTool(assistantMessage.id, request.toolId, (tool) => ({
-                  ...tool,
-                  status: 'waiting',
-                  approval: {
-                    requestId: request.requestId,
-                    summary: request.summary,
-                    detail: request.detail
-                  }
-                }));
-              })
+              localApprovalRemembered.current
+                ? Promise.resolve<'allow' | 'deny'>('allow')
+                : new Promise<'allow' | 'deny'>((resolve) => {
+                    localApprovalResolvers.current.set(request.requestId, resolve);
+                    setPendingApproval({
+                      requestId: request.requestId,
+                      toolId: request.toolId,
+                      name: request.name,
+                      summary: request.summary,
+                      detail: request.detail
+                    });
+                    patchRunTool(assistantMessage.id, request.toolId, (tool) => ({
+                      ...tool,
+                      status: 'waiting',
+                      approval: {
+                        requestId: request.requestId,
+                        summary: request.summary,
+                        detail: request.detail
+                      }
+                    }));
+                  })
           });
         } else {
           await runAgent(runSettings, runMessages, handleEvent, controller.signal);
@@ -388,6 +398,7 @@ export default function App() {
         runRef.current = null;
         localPhoneResolvers.current.clear();
         localApprovalResolvers.current.clear();
+        localApprovalRemembered.current = false;
         setPendingApproval(null);
         setPhoneToolRequest(null);
         setPhoneToolBusy(false);
@@ -404,6 +415,7 @@ export default function App() {
       const localResolver = localApprovalResolvers.current.get(requestId);
       if (localResolver) {
         localApprovalResolvers.current.delete(requestId);
+        if (decision === 'allow' && remember) localApprovalRemembered.current = true;
         localResolver(decision);
         return;
       }
@@ -460,10 +472,14 @@ export default function App() {
         if (request.name === 'ocr_image') {
           const file = await pickPhoneImage();
           const ocrText = await recognizeImage(settings, file);
-          output = `图片 OCR 识别结果：\n${ocrText}`;
+          output = `图片识图结果：\n${ocrText}`;
         } else {
           const file = await pickPhoneFile();
-          output = `文件名：${file.name}\n大小：${file.size} 字节\n\n${file.content}`;
+          output = [
+            `文件名：${file.name}`,
+            `大小：${file.size} 字节`,
+            file.content ? file.content : `正文读取失败：${file.contentError || '没有提取到可读文本'}`
+          ].join('\n\n');
         }
         const resolver = localPhoneResolvers.current.get(requestId);
         if (resolver) {
@@ -582,7 +598,7 @@ export default function App() {
             <span className="brand-caret">›</span>
           </span>
           <div>
-            <strong>口袋智能体</strong>
+            <strong>灰风</strong>
             <small>Agent on Android</small>
           </div>
         </div>

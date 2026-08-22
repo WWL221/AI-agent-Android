@@ -1,6 +1,6 @@
 {
   "appId": "com.pocketagent.mobile",
-  "appName": "口袋智能体",
+  "appName": "灰风",
   "webDir": "server/public",
   "server": {
     "androidScheme": "http"

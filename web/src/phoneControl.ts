@@ -72,7 +72,48 @@ export async function getPhoneUiTree(): Promise<UiNode | null> {
 export async function clickPhone(options: { text?: string; x?: number; y?: number }): Promise<boolean> {
   requireNative();
   const result = await AccessibilityControl.click(options);
-  return Boolean(result.ok);
+  if (result.ok || !options.text) return Boolean(result.ok);
+
+  // Some Android apps expose the label on a non-clickable child while the
+  // clickable action belongs to its parent. Tap the label bounds as a last
+  // resort after the native parent lookup has failed.
+  const root = await getPhoneUiTree();
+  const bounds = findLabelBounds(root, options.text);
+  if (!bounds) return false;
+  const [left, top, right, bottom] = bounds;
+  const fallback = await AccessibilityControl.click({
+    x: Math.round((left + right) / 2),
+    y: Math.round((top + bottom) / 2)
+  });
+  return Boolean(fallback.ok);
+}
+
+function normalizeUiLabel(value: string): string {
+  return value.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g, '').trim();
+}
+
+function findLabelBounds(node: UiNode | null, target: string): number[] | null {
+  if (!node) return null;
+  const wanted = normalizeUiLabel(target);
+  const labels = [node.text, node.contentDescription].filter(Boolean).map((value) => normalizeUiLabel(value as string));
+  const matches = labels.some(
+    (value) => value === wanted || value.includes(wanted) || wanted.includes(value) || (isNextTarget(wanted) && isNextLabel(value))
+  );
+  if (matches && Array.isArray(node.bounds) && node.bounds.length === 4) return node.bounds;
+  for (const child of node.children || []) {
+    const bounds = findLabelBounds(child, target);
+    if (bounds) return bounds;
+  }
+  return null;
+}
+
+function isNextTarget(value: string): boolean {
+  return value === '下一步' || value === 'next' || value === 'continue' || value.includes('下一步');
+}
+
+function isNextLabel(value: string): boolean {
+  return value === '下一步' || value === '继续' || value === 'next' || value === 'continue'
+    || value.startsWith('下一步') || value.startsWith('next') || value.startsWith('continue');
 }
 
 export async function scrollPhone(direction: 'forward' | 'backward' | 'up' | 'down' | 'left' | 'right'): Promise<boolean> {

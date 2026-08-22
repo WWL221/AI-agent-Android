@@ -1,4 +1,4 @@
-package com.getcapacitor.myapp;
+package com.pocketagent.mobile;
 
 import static org.junit.Assert.*;
 

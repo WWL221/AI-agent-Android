@@ -253,6 +253,57 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 
+.user-attachment-bubble {
+  display: grid;
+  gap: 8px;
+  min-width: min(260px, 86%);
+}
+
+.message-attachment {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 9px 10px;
+  background: var(--panel);
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+}
+
+.message-attachment-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 6px;
+}
+
+.message-attachment-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.message-attachment-copy strong,
+.message-attachment-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-attachment-copy strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.message-attachment-copy small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .agent-message .bubble.markdown {
   background: var(--panel);
   border: 1px solid var(--line-soft);
@@ -1876,6 +1927,11 @@ button.kelivo-row-copy {
   line-height: 1.4;
 }
 
+.file-access-options {
+  display: grid;
+  gap: 8px;
+}
+
 .sheet-field {
   display: grid;
   gap: 6px;
@@ -2025,6 +2081,11 @@ button.kelivo-row-copy {
   accent-color: var(--mint);
 }
 
+.sheet-toggle input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .permission-row {
   display: flex;
   gap: 8px;
@@ -2063,6 +2124,33 @@ button.kelivo-row-copy {
   color: var(--faint);
   font-size: 12px;
   line-height: 1.5;
+}
+
+.ocr-test-block {
+  display: grid;
+  gap: 7px;
+}
+
+.ocr-test-block > small {
+  color: var(--faint);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.ocr-test-result {
+  max-height: 220px;
+  overflow: auto;
+  margin: 0;
+  padding: 10px;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .sheet-placeholder,

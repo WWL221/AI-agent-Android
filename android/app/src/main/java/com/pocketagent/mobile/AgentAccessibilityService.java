@@ -69,11 +69,9 @@ public class AgentAccessibilityService extends AccessibilityService {
     if (text == null || text.trim().isEmpty()) return false;
     AccessibilityNodeInfo root = getRootInActiveWindow();
     if (root == null) return false;
-    String target = text.trim().toLowerCase();
-    boolean result = clickNode(root, target);
-    if (!result) {
-      result = clickDescendant(root, target);
-    }
+    String target = text.trim();
+    boolean result = clickNode(root, target, true);
+    if (!result) result = clickNode(root, target, false);
     root.recycle();
     return result;
   }
@@ -183,38 +181,38 @@ public class AgentAccessibilityService extends AccessibilityService {
     return obj;
   }
 
-  private boolean clickNode(AccessibilityNodeInfo node, String target) {
+  private boolean clickNode(AccessibilityNodeInfo node, String target, boolean exact) {
     if (node == null) return false;
-    if (node.isClickable() && matches(node, target)) {
-      return node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-    }
-    return false;
-  }
-
-  private boolean clickDescendant(AccessibilityNodeInfo node, String target) {
-    if (node == null) return false;
-    Deque<AccessibilityNodeInfo> queue = new ArrayDeque<>();
-    queue.add(node);
-    while (!queue.isEmpty()) {
-      AccessibilityNodeInfo current = queue.poll();
-      if (current == null) continue;
-      if (current.isClickable() && matches(current, target)) {
-        return current.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+    if (ClickTargetMatcher.matches(node.getText(), node.getContentDescription(), target, exact)) {
+      AccessibilityNodeInfo clickable = findClickableAncestor(node);
+      if (clickable != null) {
+        boolean result = clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+        if (clickable != node) clickable.recycle();
+        if (result) return true;
       }
-      for (int i = 0; i < current.getChildCount(); i += 1) {
-        AccessibilityNodeInfo child = current.getChild(i);
-        if (child != null) queue.add(child);
+    }
+
+    for (int i = 0; i < node.getChildCount(); i += 1) {
+      AccessibilityNodeInfo child = node.getChild(i);
+      if (child != null) {
+        boolean result = clickNode(child, target, exact);
+        child.recycle();
+        if (result) return true;
       }
     }
     return false;
   }
 
-  private boolean matches(AccessibilityNodeInfo node, String target) {
-    CharSequence text = node.getText();
-    CharSequence desc = node.getContentDescription();
-    if (text != null && String.valueOf(text).toLowerCase().contains(target)) return true;
-    if (desc != null && String.valueOf(desc).toLowerCase().contains(target)) return true;
-    return false;
+  private AccessibilityNodeInfo findClickableAncestor(AccessibilityNodeInfo node) {
+    AccessibilityNodeInfo current = node;
+    for (int depth = 0; current != null && depth < 8; depth += 1) {
+      if (current.isEnabled() && current.isClickable()) return current;
+      AccessibilityNodeInfo parent = current.getParent();
+      if (current != node) current.recycle();
+      current = parent;
+    }
+    if (current != null && current != node) current.recycle();
+    return null;
   }
 
   private AccessibilityNodeInfo findScrollable(AccessibilityNodeInfo node) {

@@ -6,6 +6,8 @@ export type ThemeMode = 'system' | 'light' | 'dark';
 
 export type SearchProvider = 'auto' | 'bing' | 'duckduckgo';
 
+export type FileAccessMode = 'approval' | 'auto' | 'full';
+
 export interface McpServer {
   id: string;
   name: string;
@@ -28,6 +30,15 @@ export interface ToolCallRecord {
   };
 }
 
+export interface MessageAttachment {
+  name: string;
+  size: number;
+  kind: 'text' | 'image' | 'document';
+  mimeType?: string;
+  contentError?: string;
+  dataUrl?: string;
+}
+
 export interface Message {
   id: string;
   role: Role;
@@ -35,6 +46,7 @@ export interface Message {
   toolCalls: ToolCallRecord[];
   createdAt: number;
   error?: string;
+  attachment?: MessageAttachment;
 }
 
 export type ThreadStatus = 'idle' | 'running' | 'error';
@@ -52,6 +64,7 @@ export interface Settings {
   runMode: 'phone' | 'server';
   serverUrl: string;
   token: string;
+  localOnly: boolean;
   apiKey: string;
   apiBaseUrl: string;
   model: string;
@@ -64,6 +77,7 @@ export interface Settings {
   enableWebSearch: boolean;
   enablePhoneTools: boolean;
   enableTasks: boolean;
+  fileAccessMode: FileAccessMode;
   allowDirectRead: boolean;
   requireWriteApproval: boolean;
   enablePhoneControl: boolean;
