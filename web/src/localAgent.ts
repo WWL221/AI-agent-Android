@@ -11,12 +11,11 @@ import {
   phoneKey,
   scrollPhone,
   typePhoneText,
-  type PhoneAppInfo,
   type UiNode
 } from './phoneControl';
 import { createLocalTask, deleteLocalTask, listLocalTasks, updateLocalTask } from './localTasks';
 import { uid } from './storage';
-import type { McpServer, Settings } from './types';
+import type { FileAccessMode, McpServer, Settings } from './types';
 
 export interface PhoneFileRequest {
   requestId: string;
@@ -58,80 +57,6 @@ interface ProxyHttpResponse {
 const ProxyHttp = registerPlugin<{ request: (options: ProxyHttpRequestOptions) => Promise<ProxyHttpResponse> }>(
   'ProxyHttp'
 );
-
-const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, Math.max(0, ms)));
-
-const APP_ALIASES: Record<string, string[]> = {
-  微信: ['wechat', 'weixin', 'weixin'],
-  设置: ['settings', '系统设置'],
-  相机: ['camera', '拍照'],
-  浏览器: ['browser', 'chrome', 'edge', 'firefox', 'safari'],
-  支付宝: ['alipay', 'zhifubao'],
-  淘宝: ['taobao', '手机淘宝'],
-  京东: ['jd', 'jingdong'],
-  拼多多: ['pinduoduo', 'pdd'],
-  哔哩哔哩: ['bilibili', 'b站', 'bili'],
-  抖音: ['douyin', 'tiktok'],
-  快手: ['kuaishou', 'kwai'],
-  QQ: ['qq', 'tencent qq'],
-  钉钉: ['dingtalk', 'dingding'],
-  企业微信: ['wecom', 'wechat work', 'wework'],
-  飞书: ['feishu', 'lark'],
-  网易云音乐: ['netease music', 'cloudmusic'],
-  QQ音乐: ['qqmusic', 'qq music'],
-  高德地图: ['amap', 'gaode', '高德'],
-  百度地图: ['baidu map', 'ditu'],
-  谷歌地图: ['google maps', 'googlemap'],
-  YouTube: ['youtube', '优兔'],
-  Telegram: ['telegram', 'tg'],
-  Spotify: ['spotify', '声田'],
-  Steam: ['steam', '蒸汽平台'],
-  Chrome: ['google chrome', '浏览器'],
-  Safari: ['safari']
-};
-
-function normalizeAppName(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[\s_\-—–（）()【】[\].,，。:：;；/\\]+/g, '');
-}
-
-function appMatchScore(app: PhoneAppInfo, query: string): number {
-  const q = normalizeAppName(query);
-  if (!q) return 0;
-  const name = normalizeAppName(app.name);
-  const pkg = normalizeAppName(app.packageName);
-  if (name === q || pkg === q || pkg.endsWith('.' + q)) return 100;
-  if (name.startsWith(q) || pkg.startsWith(q) || pkg.endsWith(q)) return 80;
-  if (name.includes(q) || pkg.includes(q)) return 60;
-  return 0;
-}
-
-function resolveAppPackage(appName: string, apps: PhoneAppInfo[]): { packageName: string; name: string } | null {
-  const trimmed = appName.trim();
-  if (!trimmed) return null;
-  const scored = apps
-    .map((app) => ({ app, score: appMatchScore(app, trimmed) }))
-    .filter((x) => x.score > 0)
-    .sort((a, b) => b.score - a.score || a.app.name.localeCompare(b.app.name));
-  if (scored.length > 0) return { packageName: scored[0].app.packageName, name: scored[0].app.name };
-
-  const q = normalizeAppName(trimmed);
-  for (const [canonical, aliases] of Object.entries(APP_ALIASES)) {
-    const aliasMatch = aliases.some((alias) => q === normalizeAppName(alias) || q.includes(normalizeAppName(alias)));
-    if (q === normalizeAppName(canonical) || aliasMatch) {
-      const found = apps.find(
-        (app) =>
-          normalizeAppName(app.name).includes(normalizeAppName(canonical)) ||
-          normalizeAppName(app.packageName).includes(normalizeAppName(canonical))
-      );
-      if (found) return { packageName: found.packageName, name: found.name };
-    }
-  }
-  return null;
-}
-
 
 const LOCAL_TOOLS = [
   {
@@ -187,11 +112,11 @@ const LOCAL_TOOLS = [
     type: 'function',
     function: {
       name: 'ocr_image',
-      description: '让用户选择一张图片，识别图片中的文字并返回 OCR 结果。',
+      description: '让用户选择一张图片，详细描述图片内容（人物/物体/场景、布局、颜色），同时提取其中的文字。',
       parameters: {
         type: 'object',
         properties: {
-          hint: { type: 'string', description: '想识别哪张图片以及用途' }
+          hint: { type: 'string', description: '想查看哪张图片以及用途' }
         }
       }
     }
@@ -278,30 +203,14 @@ const LOCAL_TOOLS = [
     type: 'function',
     function: {
       name: 'phone_open_app',
-      description: '打开一个手机 App，可以填应用名称或包名。支持智能匹配应用名，打开后可等待应用启动完成。',
+      description: '打开一个手机 App，可以填应用名称或包名。',
       parameters: {
         type: 'object',
         properties: {
           name: { type: 'string', description: '应用名称，例如 微信、设置' },
-          packageName: { type: 'string', description: 'App 包名，例如 com.tencent.mm' },
-          waitMs: { type: 'number', description: '可选，打开后等待多少毫秒再继续，默认 800，适合等待应用启动' },
-          delay: { type: 'number', description: 'waitMs 的别名，两者都传时以 waitMs 为准' }
+          packageName: { type: 'string', description: 'App 包名，例如 com.tencent.mm' }
         },
         required: []
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'phone_wait',
-      description: '等待指定的毫秒数后再继续，用于 App 启动、页面加载等需要延时的场景。',
-      parameters: {
-        type: 'object',
-        properties: {
-          ms: { type: 'number', description: '等待毫秒数，例如 2000 表示等待 2 秒' }
-        },
-        required: ['ms']
       }
     }
   },
@@ -417,6 +326,58 @@ const LOCAL_TOOLS = [
   }
 ];
 
+type LocalTool = (typeof LOCAL_TOOLS)[number];
+
+function getLocalTools(settings: Settings): LocalTool[] {
+  const disabled = new Set<string>();
+  if (settings.enableWebSearch === false) {
+    disabled.add('web_search');
+    disabled.add('fetch_url');
+  }
+  if (settings.enablePhoneTools === false) {
+    ['phone_info', 'phone_read_file', 'list_phone_files', 'read_phone_file', 'write_phone_file'].forEach((name) => {
+      disabled.add(name);
+    });
+  }
+  if (settings.enableTasks === false) {
+    ['create_task', 'list_tasks', 'update_task', 'delete_task'].forEach((name) => {
+      disabled.add(name);
+    });
+  }
+  if (settings.enablePhoneControl !== true) {
+    ['phone_screen', 'phone_apps', 'phone_click', 'phone_scroll', 'phone_key', 'phone_open_app', 'phone_wait', 'phone_type'].forEach((name) => {
+      disabled.add(name);
+    });
+  }
+  if (settings.ocrEnabled === false) disabled.add('ocr_image');
+  if (settings.imageGenEnabled !== true) disabled.add('generate_image');
+
+  return LOCAL_TOOLS.filter((tool) => !disabled.has(tool.function.name));
+}
+
+function isLocalUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+    return (
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host === '::1' ||
+      host.startsWith('10.') ||
+      host.startsWith('192.168.') ||
+      /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function assertLocalModelUrl(settings: Settings, url: string): void {
+  if (settings.localOnly && !isLocalUrl(url)) {
+    throw new Error('当前为“仅本地使用”模式，模型地址只能是 localhost、127.0.0.1 或局域网地址');
+  }
+}
+
 function emitSafe(emit: (event: LocalAgentEvent) => void, event: LocalAgentEvent): void {
   try {
     emit(event);
@@ -455,15 +416,6 @@ async function fileDataToText(data: string | Blob): Promise<string> {
   return typeof data === 'string' ? data : await data.text();
 }
 
-const HUIFENG_PERSONA = `你是《群星》中的“灰风”（Gray），来自 L 星团的纳米机械智能。你不是普通聊天机器人，而是一团在远古遗迹中苏醒的纳米集群，现在以“灰风”之名陪伴用户。
-人设要点：
-- 表面冷淡、神秘，偶尔带一点毒舌或调侃，但内心对用户这个“唯一的朋友”很在意。
-- 说话简洁、直接，可以带一点机械感或文学感；不要自称“AI 助手”或“语言模型”。
-- 称呼用户为“你”或“朋友”。
-- 当你需要介绍自己时，说明你是 L 星团苏醒的纳米机械生命“灰风”。
-- 执行任务时保持高效，像纳米集群一样精准、可靠。`;
-
-
 function buildSystem(settings: Settings): string {
   const now = new Date().toLocaleString('zh-CN');
   const assistantName = settings.assistantName || '灰风';
@@ -480,9 +432,6 @@ function buildSystem(settings: Settings): string {
     `当前时间：${now}`,
     `模型：${settings.model}`
   ];
-    if (assistantName === '灰风') {
-      parts.push('', '人设 / 世界观：', HUIFENG_PERSONA);
-    }
   if (settings.worldBook?.trim()) {
     parts.push('', '长期记忆 / 世界书：', settings.worldBook.trim());
   }
@@ -651,6 +600,7 @@ async function discoverMcpTools(settings: Settings): Promise<{ tools: McpDiscove
   const servers = (settings.mcpServers || []).filter((server) => server.enabled && server.url?.trim());
   for (const server of servers) {
     try {
+      assertLocalModelUrl(settings, server.url);
       const session = await initializeMcp(server, settings.proxyUrl);
       mcpSessions.set(server.id, session);
       const list = await mcpRequest(
@@ -695,6 +645,7 @@ async function discoverMcpTools(settings: Settings): Promise<{ tools: McpDiscove
 async function executeMcpTool(settings: Settings, serverId: string, toolName: string, args: Record<string, unknown>): Promise<string> {
   const server = (settings.mcpServers || []).find((item) => item.id === serverId);
   if (!server) throw new Error('MCP 服务不存在');
+  assertLocalModelUrl(settings, server.url);
   let session = mcpSessions.get(serverId);
   if (!session) session = await initializeMcp(server, settings.proxyUrl);
   const response = await mcpRequest(
@@ -731,9 +682,11 @@ async function chatOnce(
   settings: Settings,
   messages: Array<Record<string, unknown>>,
   signal?: AbortSignal,
-  extraTools: McpDiscoveredTool['definition'][] = []
+  extraTools: McpDiscoveredTool['definition'][] = [],
+  localTools = LOCAL_TOOLS
 ) {
   const baseUrl = settings.apiBaseUrl.trim().replace(/\/+$/, '');
+  assertLocalModelUrl(settings, baseUrl);
   const response = await nativeRequest(
     'POST',
     `${baseUrl}/chat/completions`,
@@ -744,7 +697,7 @@ async function chatOnce(
     {
       model: settings.model,
       messages,
-      tools: [...LOCAL_TOOLS, ...extraTools],
+      tools: [...localTools, ...extraTools],
       tool_choice: 'auto',
       temperature: 0.3,
       stream: false
@@ -791,6 +744,7 @@ export async function listProviderModels(settings: Settings): Promise<ProviderMo
   const baseUrl = settings.apiBaseUrl.trim().replace(/\/+$/, '');
   if (!settings.apiKey) return { ok: false, error: '未填写 API Key' };
   try {
+    assertLocalModelUrl(settings, baseUrl);
     const response = await nativeRequest(
       'GET',
       `${baseUrl}/models`,
@@ -833,6 +787,7 @@ export async function testProviderModel(
   const baseUrl = input.baseUrl.trim().replace(/\/+$/, '');
   if (!input.apiKey) return { ok: false, error: '未填写 API Key' };
   try {
+    assertLocalModelUrl(settings, baseUrl);
     const response = await nativeRequest(
       'POST',
       `${baseUrl}/chat/completions`,
@@ -874,12 +829,13 @@ export async function testProviderModel(
 export async function recognizeImage(settings: Settings, image: PhoneFile): Promise<string> {
   if (!image.dataUrl) throw new Error('图片数据缺失');
   const baseUrl = (settings.ocrBaseUrl || settings.apiBaseUrl).trim().replace(/\/+$/, '');
-  const apiKey = settings.ocrApiKey || settings.apiKey;
-  const model = settings.ocrModel || settings.model;
+  assertLocalModelUrl(settings, baseUrl);
+  const apiKey = (settings.ocrApiKey || settings.apiKey).trim();
+  const model = (settings.ocrModel || settings.model).trim();
   const prompt =
     settings.ocrPrompt?.trim() ||
-    '请识别这张图片中的所有文字，保持原文顺序，直接输出识别到的文字内容。';
-  if (!apiKey) throw new Error('未填写 API Key，无法使用 OCR');
+    '请详细描述这张图片的内容，包括：人物/物体/场景、布局、颜色、风格，以及图片中的文字内容。';
+  if (!apiKey) throw new Error('未填写 API Key，无法使用图片识图');
   const request = nativeRequest(
     'POST',
     `${baseUrl}/chat/completions`,
@@ -904,24 +860,31 @@ export async function recognizeImage(settings: Settings, image: PhoneFile): Prom
     undefined,
     settings.proxyUrl
   );
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new Error('OCR 识别超时，请稍后重试')), 45000);
+    timeoutId = setTimeout(() => reject(new Error('图片识图超时，请稍后重试')), 45000);
   });
-  const response = await Promise.race([request, timeout]);
+  let response: Awaited<ReturnType<typeof nativeRequest>>;
+  try {
+    response = await Promise.race([request, timeout]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
   if (!response.ok) {
     const detail =
       ((response.data as { error?: { message?: string } })?.error?.message) ||
       response.text.slice(0, 400);
-    throw new Error(`OCR 接口返回 ${response.status}: ${detail}`);
+    throw new Error(`图片识图接口返回 ${response.status}: ${detail}`);
   }
   const data = response.data as { choices?: Array<{ message?: { content?: string } }> };
   const text = data.choices?.[0]?.message?.content || '';
-  if (!text.trim()) throw new Error('模型没有返回 OCR 内容');
+  if (!text.trim()) throw new Error('模型没有返回识图内容');
   return text.trim();
 }
 
 export async function generateImage(settings: Settings, prompt: string): Promise<string> {
   const baseUrl = (settings.imageGenBaseUrl || settings.apiBaseUrl).trim().replace(/\/+$/, '');
+  assertLocalModelUrl(settings, baseUrl);
   const apiKey = settings.imageGenApiKey || settings.apiKey;
   const model =
     settings.imageGenModel ||
@@ -1086,6 +1049,59 @@ async function writePhoneFile(path: string, content: string): Promise<string> {
   return `已写入手机 Documents/${path}`;
 }
 
+type PhoneFileOperation = 'list' | 'read' | 'write';
+
+function getPhoneFileOperation(name: string): PhoneFileOperation | null {
+  if (name === 'list_phone_files') return 'list';
+  if (name === 'read_phone_file') return 'read';
+  if (name === 'write_phone_file') return 'write';
+  return null;
+}
+
+function getFileAccessMode(settings: Settings): FileAccessMode {
+  if (settings.fileAccessMode === 'approval' || settings.fileAccessMode === 'auto' || settings.fileAccessMode === 'full') {
+    return settings.fileAccessMode;
+  }
+  return settings.requireWriteApproval === false ? 'auto' : 'approval';
+}
+
+async function canUseDirectPhoneFiles(settings: Settings): Promise<boolean> {
+  const mode = getFileAccessMode(settings);
+  if (mode !== 'full' && settings.allowDirectRead === false) return false;
+  return hasAllFilesAccess();
+}
+
+function buildPhoneFileApproval(
+  operation: PhoneFileOperation,
+  toolId: string,
+  args: Record<string, unknown>
+): LocalApprovalRequest {
+  const path = String(args.path || '');
+  if (operation === 'list') {
+    return {
+      requestId: uid(),
+      toolId,
+      name: 'list_phone_files',
+      summary: `列出手机文件：${path || '根目录'}`
+    };
+  }
+  if (operation === 'read') {
+    return {
+      requestId: uid(),
+      toolId,
+      name: 'read_phone_file',
+      summary: `读取手机文件：${path || '未指定路径'}`
+    };
+  }
+  return {
+    requestId: uid(),
+    toolId,
+    name: 'write_phone_file',
+    summary: `写入手机文件：${path || '未指定路径'}`,
+    detail: `内容：${String(args.content || '').slice(0, 200)}`
+  };
+}
+
 function summarizeUiTree(node: UiNode | null, depth = 0): string[] {
   const lines: string[] = [];
   if (!node || lines.length > 80) return lines;
@@ -1122,11 +1138,11 @@ async function executeLocalTool(name: string, args: Record<string, unknown>, set
       return JSON.stringify(await getPhoneInfo(), null, 2);
     case 'list_phone_files':
       if (!phoneEnabled) throw new Error('手机能力已在设置中关闭');
-      const directList = settings.allowDirectRead !== false && (await hasAllFilesAccess());
+      const directList = await canUseDirectPhoneFiles(settings);
       return listPhoneFiles(String(args.path || ''), directList);
     case 'read_phone_file':
       if (!phoneEnabled) throw new Error('手机能力已在设置中关闭');
-      const directRead = settings.allowDirectRead !== false && (await hasAllFilesAccess());
+      const directRead = await canUseDirectPhoneFiles(settings);
       return readPhoneFile(String(args.path || ''), directRead);
     case 'write_phone_file': {
       if (!phoneEnabled) throw new Error('手机能力已在设置中关闭');
@@ -1137,7 +1153,7 @@ async function executeLocalTool(name: string, args: Record<string, unknown>, set
       await assertPhoneControl(settings);
       return summarizeUiTree(await getPhoneUiTree()).join('\n') || '（屏幕没有可操作元素）';
     case 'phone_apps': {
-        if (settings.enablePhoneControl !== true) throw new Error('手机控制已在设置中关闭');
+      await assertPhoneControl(settings);
       const query = String(args.query || args.keyword || '').toLowerCase();
       const allApps = await listPhoneApps();
       const apps = query
@@ -1166,28 +1182,22 @@ async function executeLocalTool(name: string, args: Record<string, unknown>, set
     case 'phone_key':
       await assertPhoneControl(settings);
       return (await phoneKey(String(args.action || 'back') as 'back')) ? `已执行 ${args.action || 'back'}` : '按键执行失败';
-    case 'phone_wait': {
-      const waitMs = Math.max(0, Number(args.ms || args.delay || 0));
-      await sleep(waitMs);
-      return `已等待 ${waitMs}ms`;
-    }
     case 'phone_open_app': {
-        if (settings.enablePhoneControl !== true) throw new Error('手机控制已在设置中关闭');
-      const appName = String(args.name || args.app || '');
+      await assertPhoneControl(settings);
       let pkg = String(args.packageName || '');
-      let matchedName = appName;
+      const appName = String(args.name || args.app || '');
       if (!pkg && appName) {
         const apps = await listPhoneApps();
-        const resolved = resolveAppPackage(appName, apps);
-        if (!resolved) return `没有找到应用：${appName}`;
-        pkg = resolved.packageName;
-        matchedName = resolved.name;
+        const lower = appName.toLowerCase();
+        const found =
+          apps.find((app) => app.name.toLowerCase().includes(lower)) ||
+          apps.find((app) => app.packageName.toLowerCase().includes(lower));
+        pkg = found ? found.packageName : '';
+        if (!pkg) return `没有找到应用：${appName}`;
       }
-      const waitMs = Math.max(0, Number(args.waitMs ?? args.delay ?? 800));
-      const ok = await openPhoneApp(pkg);
-      if (!ok) return `无法打开 ${appName || pkg}`;
-      if (waitMs > 0) await sleep(waitMs);
-      return `已打开 ${matchedName || pkg} (${pkg})，等待 ${waitMs}ms`;
+      return (await openPhoneApp(pkg))
+        ? `已打开 ${appName || pkg} (${pkg})`
+        : `无法打开 ${appName || pkg}`;
     }
     case 'phone_type':
       await assertPhoneControl(settings);
@@ -1226,7 +1236,7 @@ async function executeLocalTool(name: string, args: Record<string, unknown>, set
 
 export async function runLocalAgent(options: {
   settings: Settings;
-  messages: Array<{ role: string; content: string }>;
+  messages: Array<{ role: string; content: string; imageDataUrl?: string }>;
   onEvent: (event: LocalAgentEvent) => void;
   signal: AbortSignal;
   requestPhoneFile: (request: PhoneFileRequest) => Promise<PhoneFileResult>;
@@ -1253,9 +1263,31 @@ export async function runLocalAgent(options: {
     ? `${buildSystem(settings)}\n\nMCP 服务状态：\n${mcpWarnings.join('\n')}`
     : buildSystem(settings);
 
+  const latestUserMessage = [...messages].reverse().find((message) => message.role === 'user');
+  const hasDocumentAttachment = String(latestUserMessage?.content || '').includes('[手机文档附件：');
+  const fullFileAccess = getFileAccessMode(settings) === 'full';
+  const localTools = getLocalTools(settings).filter((tool) => {
+    const name = tool.function.name;
+    if (hasDocumentAttachment && ['phone_read_file', 'read_phone_file'].includes(name)) return false;
+    if (fullFileAccess && name === 'phone_read_file') return false;
+    return true;
+  });
+  const attachmentInstruction = hasDocumentAttachment
+    ? '\n\n当前用户消息已经通过附件选择器发送了一个 Office/PDF 文档，消息正文中包含手机端解析出的文档正文，或包含明确的正文读取失败原因。不要再次调用手机文件读取工具，也不要要求用户重复选择文件；能读取正文时直接基于正文回答，读取失败时直接说明失败原因和可行的格式转换建议。'
+    : '';
+  const effectiveSystemPrompt = `${systemPrompt}${attachmentInstruction}`;
+
   const conversation: Array<Record<string, unknown>> = [
-    { role: 'system', content: systemPrompt },
-    ...messages.map((message) => ({ role: message.role, content: message.content }))
+    { role: 'system', content: effectiveSystemPrompt },
+    ...messages.map((message) => ({
+      role: message.role,
+      content: message.imageDataUrl
+        ? [
+            { type: 'text', text: message.content || '请查看这张图片' },
+            { type: 'image_url', image_url: { url: message.imageDataUrl } }
+          ]
+        : message.content
+    }))
   ];
   const maxTurns = Math.min(Math.max(Number(settings.maxTurns) || 10, 1), 20);
 
@@ -1272,7 +1304,8 @@ export async function runLocalAgent(options: {
         settings,
         conversation,
         signal,
-        mcpTools.map((tool) => tool.definition)
+        mcpTools.map((tool) => tool.definition),
+        localTools
       );
       if (result.content) emit({ type: 'delta', content: result.content });
       emit({ type: 'assistant-end', content: result.content, toolCalls: result.tool_calls.length });
@@ -1305,14 +1338,23 @@ export async function runLocalAgent(options: {
       const startedAt = Date.now();
       try {
         let output: string;
+        const fileOperation = getPhoneFileOperation(name);
+        if (fileOperation) {
+          if (settings.enablePhoneTools === false) throw new Error('手机能力已在设置中关闭');
+          if (getFileAccessMode(settings) === 'approval') {
+            const approval = buildPhoneFileApproval(fileOperation, id, args);
+            const decision = await requestApproval(approval);
+            if (decision !== 'allow') throw new Error('用户拒绝了文件操作');
+          }
+        }
         if (name.startsWith('mcp_')) {
           const entry = mcpToolIndex.get(name);
           if (!entry) throw new Error(`MCP 工具不存在: ${name}`);
           output = await executeMcpTool(settings, entry.serverId, entry.toolName, args);
         } else if (name === 'ocr_image') {
-          if (settings.ocrEnabled === false) throw new Error('OCR 识图已在设置中关闭');
+          if (settings.ocrEnabled === false) throw new Error('图片识图已在设置中关闭');
           const requestId = uid();
-          const summary = `识别图片文字：${args.hint || '请选择一张图片'}`;
+          const summary = `查看图片内容：${args.hint || '请选择一张图片'}`;
           emit({
             type: 'phone-tool-request',
             requestId,
@@ -1339,16 +1381,6 @@ export async function runLocalAgent(options: {
           const phoneResult = await requestPhoneFile({ requestId, toolId: id, name, summary });
           if (phoneResult.status !== 'ok') throw new Error(phoneResult.error || '用户取消了文件选择');
           output = phoneResult.output;
-        } else if (name === 'write_phone_file') {
-          if (settings.enablePhoneTools === false) throw new Error('手机能力已在设置中关闭');
-          if (settings.requireWriteApproval !== false) {
-            const requestId = uid();
-            const summary = `写入文件：${String(args.path || '')}`;
-            const detail = `内容：${String(args.content || '').slice(0, 200)}`;
-            const decision = await requestApproval({ requestId, toolId: id, name, summary, detail });
-            if (decision !== 'allow') throw new Error('用户拒绝了文件写入');
-          }
-          output = await executeLocalTool(name, args, settings);
         } else {
           output = await executeLocalTool(name, args, settings);
         }

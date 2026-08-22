@@ -1,4 +1,4 @@
-import type { ModelProfile, Settings, Thread } from './types';
+import type { FileAccessMode, ModelProfile, Settings, Thread } from './types';
 
 const THREADS_KEY = 'pocket-agent.threads.v1';
 const SETTINGS_KEY = 'pocket-agent.settings.v1';
@@ -39,31 +39,33 @@ export function defaultSettings(): Settings {
     runMode: 'phone',
     serverUrl: isNative ? 'http://localhost:8787' : window.location.origin,
     token: '',
+    localOnly: false,
     apiKey: '',
     apiBaseUrl: 'https://api.openai.com/v1',
     model: 'gpt-4o-mini',
     maxTurns: 10,
     useMock: false,
     assistantName: '灰风',
-    themeMode: 'light',
+    themeMode: 'system',
     accentColor: '#f26f45',
     searchProvider: 'auto',
     enableWebSearch: true,
     enablePhoneTools: true,
     enableTasks: true,
+    fileAccessMode: 'approval',
     allowDirectRead: true,
     requireWriteApproval: true,
     enablePhoneControl: true,
-    worldBook: '你是《群星》中的“灰风”（Gray），来自 L 星团的纳米机械智能。表面冷淡、神秘，偶尔毒舌或调侃，但内心在意用户这个唯一的朋友。介绍自己时说明你是 L 星团苏醒的纳米机械生命“灰风”，不要自称 AI 助手或语言模型。',
+    worldBook: '',
     injections: '',
     quickPhrases: [],
     proxyUrl: '',
     mcpServers: [],
     ocrEnabled: true,
-    ocrBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    ocrBaseUrl: '',
     ocrApiKey: '',
-    ocrModel: 'qwen-vl-max',
-    ocrPrompt: '请识别这张图片中的所有文字，保持原文顺序，直接输出识别到的文字内容。',
+    ocrModel: '',
+    ocrPrompt: '请详细描述这张图片的内容，包括：人物/物体/场景、布局、颜色、风格，以及图片中的文字内容。',
     imageGenEnabled: false,
     imageGenBaseUrl: '',
     imageGenApiKey: '',
@@ -79,11 +81,36 @@ export function loadSettings(): Settings {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return defaultSettings();
     const parsed = JSON.parse(raw) as Partial<Settings>;
-    const merged = { ...defaultSettings(), ...parsed };
-      // 灰风品牌迁移：旧版默认助手名与深色/跟随系统主题统一改为浅色灰风
-      if (merged.assistantName === '口袋智能体') merged.assistantName = '灰风';
-      merged.themeMode = 'light';
-      if (!merged.worldBook?.trim()) merged.worldBook = '你是《群星》中的“灰风”（Gray），来自 L 星团的纳米机械智能。表面冷淡、神秘，偶尔毒舌或调侃，但内心在意用户这个唯一的朋友。介绍自己时说明你是 L 星团苏醒的纳米机械生命“灰风”，不要自称 AI 助手或语言模型。';
+    const defaults = defaultSettings();
+    const merged = { ...defaults, ...parsed };
+    const storedMode = parsed.fileAccessMode as FileAccessMode | undefined;
+    const fileAccessMode: FileAccessMode =
+      storedMode === 'approval' || storedMode === 'auto' || storedMode === 'full'
+        ? storedMode
+        : parsed.requireWriteApproval === false
+          ? 'auto'
+          : defaults.fileAccessMode;
+    merged.fileAccessMode = fileAccessMode;
+    // Keep the legacy field synchronized for older exports and installs.
+    merged.requireWriteApproval = fileAccessMode === 'approval';
+    // If “仅本地使用”被旧版自动写成 true，但模型地址不是本地/局域网，
+    // 会自动关掉，避免用户没配置本地模型时无法使用。
+    if (merged.localOnly) {
+      let host = '';
+      try {
+        host = new URL(merged.apiBaseUrl || '').hostname.toLowerCase();
+      } catch {
+        host = '';
+      }
+      const localHost =
+        host === 'localhost' ||
+        host === '127.0.0.1' ||
+        host === '::1' ||
+        host.startsWith('10.') ||
+        host.startsWith('192.168.') ||
+        /^172\.(1[6-9]|2\d|3[0-1])\./.test(host);
+      if (!localHost) merged.localOnly = false;
+    }
     if (!Array.isArray(merged.profiles) || merged.profiles.length === 0) {
       merged.profiles = [
         {

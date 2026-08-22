@@ -1,8 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">灰风</string>
-    <string name="title_activity_main">灰风</string>
-    <string name="package_name">com.pocketagent.mobile</string>
-    <string name="custom_url_scheme">com.pocketagent.mobile</string>
-    <string name="accessibility_service_description">允许灰风读取屏幕内容并点击、滚动、返回等，用于在手机 App 内执行任务。</string>
-</resources>

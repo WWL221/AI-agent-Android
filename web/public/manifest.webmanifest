@@ -1,7 +1,7 @@
 {
-  "name": "灰风",
-  "short_name": "灰风",
-  "description": "灰风：来自 L 星团的纳米机械生命，运行在安卓手机上的 AI Agent，可对话、搜索、管理任务与文件。",
+  "name": "口袋智能体",
+  "short_name": "智能体",
+  "description": "运行在安卓手机上的 Codex 风格 AI Agent：对话、任务、搜索、文件与命令审批。",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

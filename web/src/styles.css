@@ -253,6 +253,57 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 
+.user-attachment-bubble {
+  display: grid;
+  gap: 8px;
+  min-width: min(260px, 86%);
+}
+
+.message-attachment {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 9px 10px;
+  background: var(--panel);
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+}
+
+.message-attachment-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 6px;
+}
+
+.message-attachment-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.message-attachment-copy strong,
+.message-attachment-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-attachment-copy strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.message-attachment-copy small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .agent-message .bubble.markdown {
   background: var(--panel);
   border: 1px solid var(--line-soft);
@@ -1876,6 +1927,11 @@ button.kelivo-row-copy {
   line-height: 1.4;
 }
 
+.file-access-options {
+  display: grid;
+  gap: 8px;
+}
+
 .sheet-field {
   display: grid;
   gap: 6px;
@@ -2025,6 +2081,11 @@ button.kelivo-row-copy {
   accent-color: var(--mint);
 }
 
+.sheet-toggle input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .permission-row {
   display: flex;
   gap: 8px;
@@ -2063,6 +2124,33 @@ button.kelivo-row-copy {
   color: var(--faint);
   font-size: 12px;
   line-height: 1.5;
+}
+
+.ocr-test-block {
+  display: grid;
+  gap: 7px;
+}
+
+.ocr-test-block > small {
+  color: var(--faint);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.ocr-test-result {
+  max-height: 220px;
+  overflow: auto;
+  margin: 0;
+  padding: 10px;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .sheet-placeholder,
@@ -2498,248 +2586,4 @@ button.kelivo-row-copy {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-}
-
-/* ---------- 定时行动 ---------- */
-.schedule-section {
-  margin-top: 26px;
-  padding-top: 18px;
-  border-top: 1px solid var(--line);
-}
-
-.schedule-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.schedule-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--accent);
-}
-
-.schedule-title h2 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.schedule-compose {
-  display: grid;
-  gap: 8px;
-  padding: 12px;
-  margin-bottom: 12px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-}
-
-.schedule-compose input,
-.schedule-compose select {
-  width: 100%;
-  min-height: 44px;
-  padding: 9px 11px;
-  background: var(--bg-soft);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  color: var(--text);
-  font-size: 14px;
-  outline: none;
-}
-
-.schedule-compose .add-task-button {
-  width: 100%;
-  height: 44px;
-}
-
-.schedule-list {
-  display: grid;
-  gap: 9px;
-}
-
-.schedule-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 11px 12px;
-  background: var(--panel);
-  border: 1px solid var(--line-soft);
-  border-radius: 10px;
-}
-
-.schedule-copy {
-  flex: 1;
-  min-width: 0;
-}
-
-.schedule-copy h3 {
-  margin: 0 0 3px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
-  overflow-wrap: anywhere;
-}
-
-.schedule-copy p {
-  margin: 0;
-  font-size: 12.5px;
-  color: var(--muted);
-  overflow-wrap: anywhere;
-}
-
-.schedule-badge {
-  display: inline-flex;
-  align-items: center;
-  margin-top: 6px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.schedule-toggle {
-  width: 38px;
-  height: 38px;
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  background: var(--panel-2);
-  color: var(--faint);
-  border-radius: 8px;
-}
-
-.schedule-toggle .on {
-  color: var(--mint);
-}
-
-/* ---------- 定时行动：选择应用 ---------- */
-.app-pick-field {
-  display: flex;
-  gap: 8px;
-  align-items: stretch;
-}
-
-.app-pick-button {
-  flex: 1;
-  min-height: 46px;
-  padding: 10px 12px;
-  background: var(--bg-soft);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  color: var(--text);
-  font-size: 14px;
-  text-align: left;
-  overflow-wrap: anywhere;
-}
-
-.app-pick-clear {
-  min-height: 46px;
-  padding: 0 12px;
-  background: var(--panel-2);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  color: var(--danger);
-  font-size: 13px;
-  flex: 0 0 auto;
-}
-
-.app-picker-sheet {
-  width: 100%;
-  max-width: 560px;
-  max-height: 76vh;
-  display: flex;
-  flex-direction: column;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 14px;
-  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
-}
-
-.app-picker-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.app-picker-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--accent);
-}
-
-.app-picker-title h3 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.app-picker-search {
-  width: 100%;
-  min-height: 44px;
-  padding: 9px 12px;
-  margin-bottom: 10px;
-  background: var(--bg-soft);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  color: var(--text);
-  font-size: 14px;
-  outline: none;
-}
-
-.app-picker-list {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  display: grid;
-  gap: 6px;
-}
-
-.app-picker-item {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  padding: 10px 12px;
-  background: var(--bg-soft);
-  border: 1px solid var(--line-soft);
-  border-radius: 8px;
-  text-align: left;
-}
-
-.app-picker-item:active {
-  background: var(--accent-soft);
-}
-
-.app-picker-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.app-picker-item small {
-  font-size: 11.5px;
-  color: var(--faint);
-  overflow-wrap: anywhere;
-}
-
-.app-picker-empty {
-  padding: 28px 14px;
-  text-align: center;
-  color: var(--faint);
-  font-size: 13px;
-}
-
-.app-picker-error {
-  color: var(--danger);
 }

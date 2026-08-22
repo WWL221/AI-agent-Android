@@ -1,12 +1,14 @@
 import { Device } from '@capacitor/device';
+import { parseDocumentContent } from './fileParser';
 
 export interface PhoneFile {
   name: string;
   size: number;
   content: string;
-  kind: 'text' | 'image';
+  kind: 'text' | 'image' | 'document';
   mimeType?: string;
   dataUrl?: string;
+  contentError?: string;
 }
 
 export function isNative(): boolean {
@@ -56,7 +58,18 @@ export function pickPhoneFile(kind: 'text' | 'image' | 'any' = 'text'): Promise<
     input.type = 'file';
     const textAccept = 'text/*,.txt,.md,.json,.csv,.log,.js,.ts,.jsx,.tsx,.py,.html,.css,.xml,.yaml,.yml,.ini,.toml,.sql,.env,.sh,.bat,.ps1';
     const imageAccept = 'image/*,.png,.jpg,.jpeg,.webp,.bmp,.gif';
-    input.accept = kind === 'text' ? textAccept : kind === 'image' ? imageAccept : `${textAccept},${imageAccept}`;
+    const documentAccept = [
+      'application/pdf',
+      'application/rtf',
+      'application/msword',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      '.pdf,.rtf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.odt,.ods,.odp'
+    ].join(',');
+    input.accept = kind === 'image' ? imageAccept : `${textAccept},${documentAccept},${kind === 'any' ? imageAccept : ''}`;
     input.style.display = 'none';
     document.body.appendChild(input);
     let settled = false;
@@ -107,8 +120,21 @@ export function pickPhoneFile(kind: 'text' | 'image' | 'any' = 'text'): Promise<
           });
           return;
         }
+        const isText = file.type.startsWith('text/') || /\.(txt|md|json|csv|log|js|ts|jsx|tsx|py|html|css|xml|ya?ml|ini|toml|sql|env|sh|bat|ps1)$/i.test(file.name);
+        if (!isText) {
+          const parsed = await parseDocumentContent(file.name, file.type, await file.arrayBuffer());
+          finishResolve({
+            name: file.name,
+            size: file.size,
+            content: parsed.content,
+            kind: 'document',
+            mimeType: file.type || 'application/octet-stream',
+            contentError: parsed.error
+          });
+          return;
+        }
         const content = await file.text();
-        finishResolve({ name: file.name, size: file.size, content, kind: 'text' });
+        finishResolve({ name: file.name, size: file.size, content, kind: 'text', mimeType: file.type || 'text/plain' });
       } catch {
         finishReject(new Error('无法读取该文件，可能不是文本文件'));
       }

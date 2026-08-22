@@ -6,6 +6,8 @@ export type ThemeMode = 'system' | 'light' | 'dark';
 
 export type SearchProvider = 'auto' | 'bing' | 'duckduckgo';
 
+export type FileAccessMode = 'approval' | 'auto' | 'full';
+
 export interface McpServer {
   id: string;
   name: string;
@@ -28,6 +30,15 @@ export interface ToolCallRecord {
   };
 }
 
+export interface MessageAttachment {
+  name: string;
+  size: number;
+  kind: 'text' | 'image' | 'document';
+  mimeType?: string;
+  contentError?: string;
+  dataUrl?: string;
+}
+
 export interface Message {
   id: string;
   role: Role;
@@ -35,6 +46,7 @@ export interface Message {
   toolCalls: ToolCallRecord[];
   createdAt: number;
   error?: string;
+  attachment?: MessageAttachment;
 }
 
 export type ThreadStatus = 'idle' | 'running' | 'error';
@@ -52,6 +64,7 @@ export interface Settings {
   runMode: 'phone' | 'server';
   serverUrl: string;
   token: string;
+  localOnly: boolean;
   apiKey: string;
   apiBaseUrl: string;
   model: string;
@@ -64,6 +77,7 @@ export interface Settings {
   enableWebSearch: boolean;
   enablePhoneTools: boolean;
   enableTasks: boolean;
+  fileAccessMode: FileAccessMode;
   allowDirectRead: boolean;
   requireWriteApproval: boolean;
   enablePhoneControl: boolean;
@@ -102,32 +116,6 @@ export interface AgentTask {
   createdAt: string;
   updatedAt: string;
 }
-
-export type ScheduledActionType = 'open_app' | 'create_task' | 'send_message';
-
-export type ScheduledActionMode = 'once' | 'daily';
-
-export interface ScheduledAction {
-  id: string;
-  name: string;
-  type: ScheduledActionType;
-  /** 打开应用时填应用名/包名；创建任务时填任务标题；发送消息时填要发送的内容 */
-  target: string;
-  /** 打开应用时可选：解析后的包名 */
-  packageName?: string;
-  mode: ScheduledActionMode;
-  /** 仅一次时使用，格式 YYYY-MM-DD */
-  date: string;
-  /** 格式 HH:mm */
-  time: string;
-  enabled: boolean;
-  /** 是否已在系统层用 AlarmManager 注册（仅 open_app） */
-  nativeScheduled?: boolean;
-  lastRunAt?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
 
 export interface ServerConfig {
   model: string;

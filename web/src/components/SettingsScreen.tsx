@@ -30,11 +30,13 @@ import {
 import { Directory, Filesystem } from '@capacitor/filesystem';
 import { fetchConfig, fetchHealth } from '../api';
 import { hasAllFilesAccess, openAllFilesSettings } from '../fileAccess';
+import { recognizeImage } from '../localAgent';
+import { pickPhoneImage } from '../phone';
 import { disablePhoneControlService, isPhoneControlEnabled, openPhoneControlSettings } from '../phoneControl';
 import { uid } from '../storage';
 import { applyTheme } from '../theme';
 import { APP_VERSION, RELEASE_NOTES } from '../version';
-import type { McpServer, SearchProvider, ServerConfig, Settings, ThemeMode, Thread } from '../types';
+import type { FileAccessMode, McpServer, SearchProvider, ServerConfig, Settings, ThemeMode, Thread } from '../types';
 
 interface Props {
   settings: Settings;
@@ -58,6 +60,12 @@ const SEARCH_LABELS: Record<SearchProvider, string> = {
   bing: 'Bing',
   duckduckgo: 'DuckDuckGo'
 };
+
+const FILE_ACCESS_MODES: Array<{ value: FileAccessMode; label: string; description: string }> = [
+  { value: 'approval', label: '请求批准', description: '列出、读取或写入前都询问你' },
+  { value: 'auto', label: '替我审批', description: '自动批准本次 Agent 的文件操作' },
+  { value: 'full', label: '完全访问', description: '自动批准并优先使用系统全部文件权限' }
+];
 
 type SheetId =
   | 'theme-mode'
@@ -121,6 +129,8 @@ export default function SettingsScreen({
   const [sheet, setSheet] = useState<SheetId>(null);
   const [fileAccessGranted, setFileAccessGranted] = useState<boolean | null>(null);
   const [phoneControlGranted, setPhoneControlGranted] = useState<boolean | null>(null);
+  const [ocrTesting, setOcrTesting] = useState(false);
+  const [ocrTestResult, setOcrTestResult] = useState('');
 
   useEffect(() => {
     applyTheme(draft);
@@ -130,7 +140,9 @@ export default function SettingsScreen({
     const next = {
       ...draft,
       serverUrl: draft.serverUrl.trim().replace(/\/+$/, ''),
-      maxTurns: Math.min(Math.max(Number(draft.maxTurns) || 10, 1), 20)
+      maxTurns: Math.min(Math.max(Number(draft.maxTurns) || 10, 1), 20),
+      allowDirectRead: draft.fileAccessMode === 'full' ? true : draft.allowDirectRead,
+      requireWriteApproval: draft.fileAccessMode === 'approval'
     };
     setDraft(next);
     setSettings(next);
@@ -149,6 +161,30 @@ export default function SettingsScreen({
     } catch (error) {
       setServerConfig(null);
       setStatus(error instanceof Error ? error.message : '连接失败');
+    }
+  };
+
+  const testOcr = async () => {
+    if (!draft.ocrEnabled) {
+      setStatus('请先启用 OCR 识图');
+      return;
+    }
+    if (!(draft.ocrApiKey || draft.apiKey).trim()) {
+      setStatus('请先填写 OCR API Key，或在模型设置中填写通用 API Key');
+      return;
+    }
+    setOcrTesting(true);
+    setOcrTestResult('');
+    setStatus('请选择一张图片进行 OCR 测试…');
+    try {
+      const image = await pickPhoneImage();
+      const result = await recognizeImage(draft, image);
+      setOcrTestResult(result.slice(0, 8000));
+      setStatus('OCR 测试成功');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'OCR 测试失败');
+    } finally {
+      setOcrTesting(false);
     }
   };
 
@@ -206,6 +242,15 @@ export default function SettingsScreen({
     }
   };
 
+  const selectFileAccessMode = (mode: FileAccessMode) => {
+    setDraft((current) => ({
+      ...current,
+      fileAccessMode: mode,
+      requireWriteApproval: mode === 'approval',
+      ...(mode === 'full' ? { allowDirectRead: true } : {})
+    }));
+  };
+
   const exportBackup = async () => {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const fileName = `PocketAgentBackup-${stamp}.json`;
@@ -256,6 +301,7 @@ export default function SettingsScreen({
   const storageLabel = `${threads.length} 个文件 · ${formatBytes(JSON.stringify(threads).length)}`;
   const mcpEnabledCount = (draft.mcpServers || []).filter((server) => server.enabled && server.url?.trim()).length;
   const quickPhraseCount = (draft.quickPhrases || []).filter((phrase) => phrase.trim()).length;
+  const fileAccessModeLabel = FILE_ACCESS_MODES.find((mode) => mode.value === draft.fileAccessMode)?.label || '请求批准';
 
   const renderSheet = () => {
     if (!sheet) return null;
@@ -332,6 +378,17 @@ export default function SettingsScreen({
               </button>
             </div>
           </div>
+          <label className="sheet-toggle">
+            <span>
+              <strong>仅本地使用</strong>
+              <small>模型地址只允许 localhost、127.0.0.1 或局域网地址</small>
+            </span>
+            <input
+              type="checkbox"
+              checked={draft.localOnly}
+              onChange={(event) => setDraft({ ...draft, localOnly: event.target.checked })}
+            />
+          </label>
           <label className="sheet-field">
             <span>服务器地址</span>
             <input
@@ -379,15 +436,42 @@ export default function SettingsScreen({
           </label>
           <label className="sheet-toggle">
             <span>
-              <strong>直接读取全部文件</strong>
-              <small>需要系统“所有文件访问”权限，读取不再逐个选文件</small>
+              <strong>使用系统“所有文件访问”</strong>
+              <small>
+                {draft.fileAccessMode === 'full'
+                  ? '完全访问模式会优先使用此权限；未授权时仍受 Android 限制'
+                  : '允许直接浏览共享存储；未授权时仍可访问 App Documents'}
+              </small>
             </span>
             <input
               type="checkbox"
-              checked={draft.allowDirectRead}
+              checked={draft.fileAccessMode === 'full' || draft.allowDirectRead}
               onChange={(event) => setDraft({ ...draft, allowDirectRead: event.target.checked })}
+              disabled={draft.fileAccessMode === 'full'}
             />
           </label>
+          <div className="sheet-field">
+            <span>文件访问权限</span>
+            <div className="file-access-options" role="radiogroup" aria-label="文件访问权限">
+              {FILE_ACCESS_MODES.map((mode) => (
+                <button
+                  key={mode.value}
+                  type="button"
+                  className={`sheet-option ${draft.fileAccessMode === mode.value ? 'active' : ''}`}
+                  role="radio"
+                  aria-checked={draft.fileAccessMode === mode.value}
+                  onClick={() => selectFileAccessMode(mode.value)}
+                >
+                  <span>
+                    <strong>{mode.label}</strong>
+                    <small>{mode.description}</small>
+                  </span>
+                  {draft.fileAccessMode === mode.value && <CheckCircle2 size={19} />}
+                </button>
+              ))}
+            </div>
+            <small>仅适用于 Agent 列出、读取和写入文件；你主动选择附件时不会重复询问。</small>
+          </div>
           <div className="permission-row">
             <button className="secondary-button sheet-button" onClick={checkFileAccess}>
               检查权限
@@ -399,17 +483,6 @@ export default function SettingsScreen({
           {fileAccessGranted !== null && (
             <p className="sheet-hint">{fileAccessGranted ? '权限已开启，可直接读取手机文件。' : '未开启，点“前往授权”到系统设置允许。'}</p>
           )}
-          <label className="sheet-toggle">
-            <span>
-              <strong>写入文件需要审批</strong>
-              <small>Agent 写入文件前必须经过你确认</small>
-            </span>
-            <input
-              type="checkbox"
-              checked={draft.requireWriteApproval}
-              onChange={(event) => setDraft({ ...draft, requireWriteApproval: event.target.checked })}
-            />
-          </label>
           <label className="sheet-toggle">
             <span>
               <strong>本地任务</strong>
@@ -436,7 +509,7 @@ export default function SettingsScreen({
             <input
               value={draft.assistantName}
               onChange={(event) => setDraft({ ...draft, assistantName: event.target.value })}
-              placeholder="口袋智能体"
+              placeholder="灰风"
             />
             <small>会显示在系统提示中，也用于对话里的自我称呼。</small>
           </label>
@@ -508,11 +581,11 @@ export default function SettingsScreen({
     }
     if (sheet === 'ocr') {
       return (
-        <SettingsSheet title="OCR 识图" onClose={() => setSheet(null)}>
+        <SettingsSheet title="图片识图" onClose={() => setSheet(null)}>
           <label className="sheet-toggle">
             <span>
-              <strong>启用 OCR 识图</strong>
-              <small>允许 Agent 识别图片文字，也支持直接发送图片附件</small>
+              <strong>启用图片识图</strong>
+              <small>允许 Agent 识别图片文字和画面内容，也支持直接发送图片附件</small>
             </span>
             <input
               type="checkbox"
@@ -535,8 +608,8 @@ export default function SettingsScreen({
               value={draft.ocrApiKey}
               onChange={(event) => setDraft({ ...draft, ocrApiKey: event.target.value })}
               placeholder="留空则使用当前 API Key"
-              type="text"
-              autoComplete="off"
+              type="password"
+              autoComplete="new-password"
               autoCapitalize="off"
               autoCorrect="off"
               spellCheck={false}
@@ -559,6 +632,14 @@ export default function SettingsScreen({
               rows={4}
             />
           </label>
+          <div className="ocr-test-block">
+            <button className="secondary-button sheet-button" onClick={testOcr} disabled={ocrTesting || !draft.ocrEnabled}>
+              <ScanText size={16} />
+              {ocrTesting ? '正在测试图片识图…' : '选择图片测试图片识图'}
+            </button>
+            <small>测试只会把你选择的图片发送到上面的 OCR 服务。</small>
+            {ocrTestResult ? <pre className="ocr-test-result">{ocrTestResult}</pre> : null}
+          </div>
           <button className="primary-button kelivo-save" onClick={save}>
             <Save size={17} />
             保存设置
@@ -879,7 +960,7 @@ export default function SettingsScreen({
                 <strong>偏好设置</strong>
                 <small>运行模式、工具开关与连接</small>
               </span>
-              <span className="kelivo-row-value">默认</span>
+              <span className="kelivo-row-value">{fileAccessModeLabel}</span>
               <ChevronRight size={17} />
             </button>
             <button className="kelivo-row" onClick={() => setSheet('assistant')}>
@@ -943,13 +1024,19 @@ export default function SettingsScreen({
               <span className="kelivo-row-value">{SEARCH_LABELS[draft.searchProvider]}</span>
               <ChevronRight size={17} />
             </button>
-            <button className="kelivo-row" onClick={() => setSheet('ocr')}>
+            <button
+              className="kelivo-row"
+              onClick={() => {
+                setOcrTestResult('');
+                setSheet('ocr');
+              }}
+            >
               <span className="kelivo-row-icon">
                 <ScanText size={18} />
               </span>
               <span className="kelivo-row-copy">
-                <strong>OCR 识图</strong>
-                <small>识别图片中的文字</small>
+                <strong>图片识图</strong>
+                <small>识别图片文字与画面内容</small>
               </span>
               <span className="kelivo-row-value">{draft.ocrEnabled ? (draft.ocrModel || draft.model) : '未启用'}</span>
               <ChevronRight size={17} />

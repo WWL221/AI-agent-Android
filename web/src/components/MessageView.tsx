@@ -5,16 +5,20 @@ import {
   CircleAlert,
   Clock3,
   FilePen,
+  File,
+  FileSpreadsheet,
   FileText,
   FolderOpen,
   Globe,
   ListChecks,
   LoaderCircle,
+  Image as ImageIcon,
+  Presentation,
   Search,
   ShieldAlert,
   Terminal
 } from 'lucide-react';
-import type { Message, ToolCallRecord } from '../types';
+import type { Message, MessageAttachment, ToolCallRecord } from '../types';
 
 const TOOL_ICONS: Record<string, typeof Search> = {
   web_search: Search,
@@ -41,6 +45,51 @@ function toolLabel(name: string): string {
     update_task: '更新任务'
   };
   return labels[name] || name;
+}
+
+function attachmentIcon(attachment: MessageAttachment) {
+  if (attachment.kind === 'image') return ImageIcon;
+  if (/\.(pptx?|odp)$/i.test(attachment.name)) return Presentation;
+  if (/\.(xlsx?|ods|csv)$/i.test(attachment.name)) return FileSpreadsheet;
+  if (attachment.kind === 'text') return FileText;
+  return File;
+}
+
+function formatBytes(size: number): string {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function AttachmentCard({ attachment }: { attachment: MessageAttachment }) {
+  const Icon = attachmentIcon(attachment);
+  const kindLabel = attachment.kind === 'image' ? '图片' : attachment.kind === 'text' ? '文本文件' : '文档';
+  return (
+    <div className="message-attachment" role="group" aria-label={`附件：${attachment.name}`}>
+      <span className="message-attachment-icon"><Icon size={20} /></span>
+      <span className="message-attachment-copy">
+        <strong>{attachment.name}</strong>
+        <small>{kindLabel} · {formatBytes(attachment.size)}</small>
+      </span>
+    </div>
+  );
+}
+
+function legacyAttachmentView(content: string): { text: string; attachment: MessageAttachment } | null {
+  const marker = /\[手机附件：([^\n（]+?)（(\d+) 字节）\]\n\n/;
+  const match = marker.exec(content);
+  if (!match || match.index === undefined) return null;
+  const prefix = content.slice(0, match.index).trim();
+  const text = prefix === '请处理这个手机文件：' ? '' : prefix;
+  return {
+    text,
+    attachment: {
+      name: match[1].trim(),
+      size: Number(match[2]),
+      kind: 'text',
+      mimeType: 'text/plain'
+    }
+  };
 }
 
 function ToolStep({ tool }: { tool: ToolCallRecord }) {
@@ -80,9 +129,15 @@ function ToolStep({ tool }: { tool: ToolCallRecord }) {
 
 export default function MessageView({ message }: { message: Message }) {
   if (message.role === 'user') {
+    const legacy = !message.attachment ? legacyAttachmentView(message.content) : null;
+    const attachment = message.attachment || legacy?.attachment;
+    const content = message.attachment ? message.content : legacy?.text || message.content;
     return (
       <div className="message user-message">
-        <div className="bubble">{message.content}</div>
+        <div className={`bubble ${attachment ? 'user-attachment-bubble' : ''}`}>
+          {attachment ? <AttachmentCard attachment={attachment} /> : null}
+          {content ? <div>{content}</div> : null}
+        </div>
       </div>
     );
   }

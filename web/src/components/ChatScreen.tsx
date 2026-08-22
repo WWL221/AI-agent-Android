@@ -1,7 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CircleStop, List, MessageSquarePlus, Paperclip, Send, Sparkles, Trash2, X } from 'lucide-react';
-import { recognizeImage } from '../localAgent';
-import type { Settings, Thread } from '../types';
+import {
+  CircleStop,
+  File,
+  FileSpreadsheet,
+  FileText,
+  Image as ImageIcon,
+  List,
+  MessageSquarePlus,
+  Paperclip,
+  Presentation,
+  Send,
+  Sparkles,
+  Trash2,
+  X
+} from 'lucide-react';
+import type { MessageAttachment, Settings, Thread } from '../types';
 import { pickPhoneFile, type PhoneFile } from '../phone';
 import MessageView from './MessageView';
 
@@ -12,6 +25,14 @@ const SUGGESTIONS = [
   '帮我写一份周末学习计划的 Markdown 笔记'
 ];
 
+function attachmentIcon(file: Pick<PhoneFile, 'name' | 'kind'>) {
+  if (file.kind === 'image') return ImageIcon;
+  if (/\.(pptx?|odp)$/i.test(file.name)) return Presentation;
+  if (/\.(xlsx?|ods|csv)$/i.test(file.name)) return FileSpreadsheet;
+  if (file.kind === 'text') return FileText;
+  return File;
+}
+
 interface Props {
   thread: Thread | null;
   threads: Thread[];
@@ -19,7 +40,7 @@ interface Props {
   running: boolean;
   quickPhrases: string[];
   settings: Settings;
-  onSend: (text: string, deep: boolean) => void;
+  onSend: (text: string, deep: boolean, attachment?: MessageAttachment, displayText?: string) => void;
   onCancel: () => void;
   onNew: () => void;
   onSelectThread: (id: string) => void;
@@ -49,7 +70,10 @@ export default function ChatScreen({
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
   const visibleMessages = useMemo(
-    () => (thread ? thread.messages.filter((message) => message.content || message.toolCalls.length) : []),
+    () =>
+      thread
+        ? thread.messages.filter((message) => message.content || message.toolCalls.length || message.attachment)
+        : [],
     [thread]
   );
   const suggestions = useMemo(() => {
@@ -76,19 +100,34 @@ export default function ChatScreen({
     setProcessingAttachment(true);
     let finalText: string;
     try {
+      const attachmentInfo = attachment
+        ? {
+            name: attachment.name,
+            size: attachment.size,
+            kind: attachment.kind,
+            mimeType: attachment.mimeType,
+            contentError: attachment.contentError,
+            dataUrl: attachment.kind === 'image' ? attachment.dataUrl : undefined
+          }
+        : undefined;
       if (attachment?.kind === 'image') {
-        if (settings.ocrEnabled === false) throw new Error('请在设置里开启 OCR 识图');
-        const ocrText = await recognizeImage(settings, attachment);
+        // 主模型支持视觉时直接把原图交给模型，不再先 OCR
+        finalText = value || '请查看这张图片';
+      } else if (attachment?.kind === 'document') {
+        const documentPart = `[手机文档附件：${attachment.name}（${attachment.size} 字节）]`;
+        const documentNotice = attachment.content
+          ? `[文档正文]\n${attachment.content}`
+          : `[文档正文读取失败]\n${attachment.contentError || '当前文件没有可读取的正文内容。'}`;
         finalText = value
-          ? `${value}\n\n[图片 OCR 结果]\n${ocrText}`
-          : `请处理这张图片，OCR 结果如下：\n${ocrText}`;
+          ? `${value}\n\n${documentPart}\n${documentNotice}`
+          : `请处理这个手机文档附件：\n${documentPart}\n${documentNotice}`;
       } else {
         const filePart = attachment
           ? `\n\n[手机附件：${attachment.name}（${attachment.size} 字节）]\n\n${attachment.content}`
           : '';
         finalText = value ? `${value}${filePart}` : `请处理这个手机文件：${filePart}`;
       }
-      onSend(finalText, deep);
+      onSend(finalText, deep, attachmentInfo, value);
       setText('');
       setAttachment(null);
       setAttachError('');
@@ -146,8 +185,8 @@ export default function ChatScreen({
               <span className="sigil-caret">›</span>
               <span className="sigil-cursor" />
             </div>
-            <h2>我是灰风，来自 L 星团的纳米机械生命</h2>
-            <p>我可以搜索资料、管理任务、读写文件；危险操作会先征求你的批准。</p>
+            <h2>把任务交给手机里的 Agent</h2>
+            <p>它会搜索资料、管理任务、读写工作区文件，危险操作会先征求你的批准。</p>
             <div className="suggestion-list">
               {suggestions.map((suggestion) => (
                 <button
@@ -170,6 +209,10 @@ export default function ChatScreen({
       <div className="composer-wrap">
         {attachment && (
           <div className="attachment-chip">
+            {(() => {
+              const Icon = attachmentIcon(attachment);
+              return <Icon size={17} aria-hidden="true" />;
+            })()}
             <span className="attachment-name">{attachment.name}</span>
             <span className="attachment-size">{(attachment.size / 1024).toFixed(1)} KB</span>
             <button onClick={() => setAttachment(null)} aria-label="移除附件" title="移除附件">
