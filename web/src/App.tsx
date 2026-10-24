@@ -9,7 +9,8 @@ import {
   type AgentEvent
 } from './api';
 import { loadSettings, loadThreads, saveSettings, saveThreads, uid } from './storage';
-import { getPhoneInfo, pickPhoneFile, pickPhoneImage } from './phone';
+import { getPhoneInfo, isNative, pickPhoneFile, pickPhoneImage } from './phone';
+import { isPhoneControlEnabled } from './phoneControl';
 import { recognizeImage, runLocalAgent, type PhoneFileRequest, type PhoneFileResult } from './localAgent';
 import { listLocalTasks } from './localTasks';
 import { applyTheme } from './theme';
@@ -19,9 +20,12 @@ import TaskScreen from './components/TaskScreen';
 import SettingsScreen from './components/SettingsScreen';
 import ModelScreen from './components/ModelScreen';
 import ApprovalSheet from './components/ApprovalSheet';
+import AccessibilityPrompt from './components/AccessibilityPrompt';
 import PhoneToolSheet, { type PhoneToolRequest } from './components/PhoneToolSheet';
 
 type Tab = 'chat' | 'tasks' | 'settings' | 'models';
+
+const A11Y_DEFER_KEY = 'pocket-agent.a11y.defer';
 
 interface ApprovalState {
   requestId: string;
@@ -55,6 +59,7 @@ export default function App() {
   const [phoneToolRequest, setPhoneToolRequest] = useState<PhoneToolRequest | null>(null);
   const [phoneToolBusy, setPhoneToolBusy] = useState(false);
   const [tasksError, setTasksError] = useState('');
+  const [a11yPromptOpen, setA11yPromptOpen] = useState(false);
 
   const activeIdRef = useRef(activeId);
   const runRef = useRef<{ controller: AbortController; runId: string; targetId: string } | null>(null);
@@ -91,6 +96,21 @@ export default function App() {
   useEffect(() => {
     refreshTasks();
   }, [refreshTasks]);
+
+  // 默认获取无障碍权限：启动后主动检查，未开启就弹出引导。
+  // 「暂不」只在本次会话生效，下次启动会再次询问，直到授权或关闭手机控制。
+  useEffect(() => {
+    if (!isNative() || settings.enablePhoneControl === false) return;
+    if (sessionStorage.getItem(A11Y_DEFER_KEY)) return;
+    const timer = setTimeout(() => {
+      isPhoneControlEnabled()
+        .then((enabled) => {
+          if (!enabled) setA11yPromptOpen(true);
+        })
+        .catch(() => {});
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [settings.enablePhoneControl]);
 
   const patchActiveThread = useCallback((updater: (thread: Thread) => Thread) => {
     const id = activeIdRef.current;
@@ -680,6 +700,14 @@ export default function App() {
       </nav>
 
       <ApprovalSheet approval={pendingApproval} onDecision={handleDecision} />
+      <AccessibilityPrompt
+        open={a11yPromptOpen}
+        onDefer={() => {
+          sessionStorage.setItem(A11Y_DEFER_KEY, '1');
+          setA11yPromptOpen(false);
+        }}
+        onEnabled={() => setA11yPromptOpen(false)}
+      />
       <PhoneToolSheet request={phoneToolRequest} busy={phoneToolBusy} onPick={handlePhonePick} onCancel={handlePhoneCancel} />
     </div>
   );

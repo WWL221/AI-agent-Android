@@ -1,4 +1,4 @@
-export const APP_VERSION = '0.2.0';
+export const APP_VERSION = '0.2.1';
 
 export interface ReleaseNote {
   version: string;
@@ -7,6 +7,14 @@ export interface ReleaseNote {
 }
 
 export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: '0.2.1',
+    date: '2026-10-24',
+    notes: [
+      '默认引导开启无障碍权限：启动时自动检查，未开启会弹出引导，一键跳转系统授权，返回后自动复查',
+      '设置页手机控制面板打开时自动显示当前授权状态，不再需要手动点“检查服务”'
+    ]
+  },
   {
     version: '0.2.0',
     date: '2026-10-24',

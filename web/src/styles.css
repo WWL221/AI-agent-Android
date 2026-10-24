@@ -2126,6 +2126,23 @@ button.kelivo-row-copy {
   line-height: 1.5;
 }
 
+.a11y-recheck {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.a11y-recheck:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .ocr-test-block {
   display: grid;
   gap: 7px;

@@ -31,7 +31,7 @@ import { Directory, Filesystem } from '@capacitor/filesystem';
 import { fetchConfig, fetchHealth } from '../api';
 import { hasAllFilesAccess, openAllFilesSettings } from '../fileAccess';
 import { recognizeImage } from '../localAgent';
-import { pickPhoneImage } from '../phone';
+import { pickPhoneImage, isNative } from '../phone';
 import { disablePhoneControlService, isPhoneControlEnabled, openPhoneControlSettings } from '../phoneControl';
 import { uid } from '../storage';
 import { applyTheme } from '../theme';
@@ -135,6 +135,14 @@ export default function SettingsScreen({
   useEffect(() => {
     applyTheme(draft);
   }, [draft.themeMode, draft.accentColor]);
+
+  // 打开手机控制面板时自动检查无障碍状态，不再需要手动点“检查服务”。
+  useEffect(() => {
+    if (sheet !== 'phonecontrol' || !isNative()) return;
+    isPhoneControlEnabled()
+      .then((enabled) => setPhoneControlGranted(enabled))
+      .catch(() => {});
+  }, [sheet]);
 
   const save = () => {
     const next = {
