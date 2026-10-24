@@ -1245,7 +1245,7 @@ export async function runLocalAgent(options: {
   const { settings, messages, onEvent, signal, requestPhoneFile, requestApproval } = options;
   const emit = (event: LocalAgentEvent) => emitSafe(onEvent, event);
   if (!settings.apiKey) {
-    emit({ type: 'error', message: '请在设置里填写 API Key，或开启演示模式' });
+    emit({ type: 'error', message: '请在设置里填写 API Key（演示模式仅在电脑服务模式可用）' });
     return;
   }
 

@@ -1,4 +1,4 @@
-export const APP_VERSION = '0.1.11';
+export const APP_VERSION = '0.2.0';
 
 export interface ReleaseNote {
   version: string;
@@ -7,6 +7,16 @@ export interface ReleaseNote {
 }
 
 export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: '0.2.0',
+    date: '2026-10-24',
+    notes: [
+      '安全加固：模型接口只允许应用自身跨域访问，局域网里的陌生网页无法再读取接口或代替你批准操作',
+      '服务端支持 AGENT_HOST 指定监听地址，可设置为 127.0.0.1 只允许本机访问',
+      '任务写入加锁，多个任务并发执行时不再互相覆盖',
+      '统一各端版本号为 0.2.0，服务端 /api/health 返回真实版本'
+    ]
+  },
   {
     version: '0.1.11',
     date: '2026-08-03',

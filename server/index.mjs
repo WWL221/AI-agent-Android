@@ -32,6 +32,7 @@ loadEnv();
 
 const config = {
   port: Number(process.env.PORT) || 8787,
+  host: process.env.AGENT_HOST || '0.0.0.0',
   apiKey: process.env.OPENAI_API_KEY || '',
   baseUrl: process.env.AGENT_BASE_URL || 'https://api.openai.com/v1',
   model: process.env.AGENT_MODEL || 'gpt-4o-mini',
@@ -42,6 +43,20 @@ const config = {
 };
 
 await mkdir(config.workspace, { recursive: true });
+
+// 只允许应用自身（Capacitor WebView 的 http://localhost）和开发服务器跨域访问；
+// 局域网里其他网页打开的任意网站都无法读取 API 响应，也就拿不到审批 requestId。
+const CORS_ALLOW_ORIGINS = new Set([
+  'http://localhost',
+  'https://localhost',
+  'capacitor://localhost',
+  'http://localhost:5173'
+]);
+
+function resolveCorsOrigin(req) {
+  const origin = String(req.headers.origin || '');
+  return CORS_ALLOW_ORIGINS.has(origin) ? origin : '';
+}
 
 const runs = new Map();
 const pendingApprovals = new Map();
@@ -64,11 +79,15 @@ const MIME = {
 
 function sendJson(res, status, payload) {
   const body = JSON.stringify(payload);
-  res.writeHead(status, {
+  const headers = {
     'Content-Type': 'application/json; charset=utf-8',
-    'Content-Length': Buffer.byteLength(body),
-    'Access-Control-Allow-Origin': '*'
-  });
+    'Content-Length': Buffer.byteLength(body)
+  };
+  if (res.corsOrigin) {
+    headers['Access-Control-Allow-Origin'] = res.corsOrigin;
+    headers['Vary'] = 'Origin';
+  }
+  res.writeHead(status, headers);
   res.end(body);
 }
 
@@ -123,7 +142,8 @@ function serveStatic(req, res, url) {
   if (pathname === '/') pathname = '/index.html';
   const filePath = path.join(publicDir, pathname);
   const normalized = path.normalize(filePath);
-  if (!normalized.startsWith(path.normalize(publicDir))) {
+  const normalizedRoot = path.normalize(publicDir);
+  if (normalized !== normalizedRoot && !normalized.startsWith(normalizedRoot + path.sep)) {
     sendJson(res, 403, { error: '禁止访问' });
     return;
   }
@@ -143,7 +163,7 @@ function serveStatic(req, res, url) {
     return;
   }
   res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-  res.end('口袋智能体服务已启动，但前端尚未构建。请先运行 npm run build。');
+  res.end('灰风服务已启动，但前端尚未构建。请先运行 npm run build。');
 }
 
 async function handleTasks(req, res, method, url) {
@@ -262,7 +282,9 @@ async function handleAgentRun(req, res, body) {
     'Content-Type': 'text/event-stream; charset=utf-8',
     'Cache-Control': 'no-cache, no-transform',
     Connection: 'keep-alive',
-    'Access-Control-Allow-Origin': '*',
+    ...(res.corsOrigin
+      ? { 'Access-Control-Allow-Origin': res.corsOrigin, Vary: 'Origin' }
+      : {}),
     'X-Accel-Buffering': 'no'
   });
   res.write(`data: ${JSON.stringify({ type: 'started', runId })}\n\n`);
@@ -295,23 +317,39 @@ async function handleAgentRun(req, res, body) {
   }
 }
 
+const pkg = JSON.parse(readFileSync(path.join(projectRoot, 'package.json'), 'utf8'));
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const method = req.method || 'GET';
+  res.corsOrigin = resolveCorsOrigin(req);
 
   if (method === 'OPTIONS') {
-    res.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
+    const headers = {
       'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type,Authorization,x-auth-token',
       'Access-Control-Max-Age': '86400'
-    });
+    };
+    if (res.corsOrigin) {
+      headers['Access-Control-Allow-Origin'] = res.corsOrigin;
+      headers['Vary'] = 'Origin';
+    }
+    res.writeHead(204, headers);
     res.end();
     return;
   }
 
   if (url.pathname === '/api/health' && method === 'GET') {
-    return sendJson(res, 200, { ok: true, name: 'pocket-agent', version: '0.1.0', time: new Date().toISOString() });
+    return sendJson(res, 200, { ok: true, name: pkg.name, version: pkg.version, time: new Date().toISOString() });
+  }
+
+  if (
+    url.pathname.startsWith('/api/') &&
+    method !== 'GET' &&
+    method !== 'HEAD' &&
+    !/^application\/json/i.test(String(req.headers['content-type'] || ''))
+  ) {
+    return sendJson(res, 415, { error: 'Content-Type 必须是 application/json' });
   }
 
   if (url.pathname.startsWith('/api/') && !isAuthorized(req)) {
@@ -442,18 +480,22 @@ const server = createServer(async (req, res) => {
   return serveStatic(req, res, url);
 });
 
-server.listen(config.port, () => {
+server.listen(config.port, config.host, () => {
   const addresses = [];
-  const interfaces = os.networkInterfaces();
-  for (const list of Object.values(interfaces)) {
-    for (const item of list || []) {
-      if (item.family === 'IPv4' && !item.internal) addresses.push(item.address);
+  if (config.host === '0.0.0.0') {
+    const interfaces = os.networkInterfaces();
+    for (const list of Object.values(interfaces)) {
+      for (const item of list || []) {
+        if (item.family === 'IPv4' && !item.internal) addresses.push(item.address);
+      }
     }
+  } else {
+    addresses.push(config.host);
   }
-  console.log('口袋智能体已启动');
+  console.log(`灰风服务已启动 (v${pkg.version})`);
   console.log(`  本机: http://localhost:${config.port}`);
   for (const address of addresses) {
-    console.log(`  手机访问: http://${address}:${config.port}`);
+    console.log(`  访问地址: http://${address}:${config.port}`);
   }
   console.log(`  工作区: ${config.workspace}`);
   console.log(config.mock ? '  模式: 演示模式（无需 API Key）' : '  模式: 真实模型');

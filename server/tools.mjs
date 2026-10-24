@@ -1,6 +1,7 @@
 import { exec } from 'node:child_process';
 import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { addTask, listTasks, patchTask } from './store.mjs';
 
@@ -288,7 +289,10 @@ async function runFetchUrl(args) {
 }
 
 function workspaceRoot() {
-  return path.resolve(process.cwd(), process.env.AGENT_WORKSPACE || './server/workspace');
+  // 与 index.mjs 的 config.workspace 一致：相对项目根目录（server/ 的上一级）解析，
+  // 不依赖进程启动时的工作目录。
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  return path.resolve(here, '..', process.env.AGENT_WORKSPACE || './server/workspace');
 }
 
 function resolveInWorkspace(relativePath = '') {

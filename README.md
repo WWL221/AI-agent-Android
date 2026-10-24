@@ -1,4 +1,4 @@
-# 口袋智能体
+# 灰风（pocket-agent）
 
 一个可以在安卓手机上运行的 Codex 风格 AI Agent。默认“手机独立模式”下，Agent 的对话、搜索、文件、任务全部在手机内运行，不依赖电脑；也可以切换到“电脑服务模式”，让电脑端的 Node Agent 服务执行 shell 和电脑文件操作。
 
@@ -18,7 +18,7 @@
 需要 Node.js 20+。
 
 ```powershell
-cd D:\ai\pocket-agent
+cd AI-agent-Android
 npm run install:all
 npm run build
 npm run server
@@ -133,6 +133,8 @@ scripts/make_icons.py 生成 PWA 图标
 - 文件工具只能访问 `AGENT_WORKSPACE` 指定的工作区
 - 设置 `AGENT_ALLOW_SHELL=false` 可以完全关闭 shell 工具
 - 设置 `AGENT_AUTH_TOKEN=...` 后，所有 `/api/*` 请求都需要在手机设置里填写相同令牌
+- API 只对应用自身（`http://localhost`）开放跨域访问，其他网页无法读取接口响应或代替你批准操作
+- 默认监听 `0.0.0.0` 供手机局域网访问；在 `.env` 里设置 `AGENT_HOST=127.0.0.1` 可只允许本机访问
 - 对话记录存在手机浏览器 localStorage，任务存在电脑端 `server/data/tasks.json`
 
 ## 常用命令

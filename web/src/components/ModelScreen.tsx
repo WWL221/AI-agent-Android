@@ -575,7 +575,7 @@ export default function ModelScreen({ settings, setSettings, onBack }: Props) {
             <label className="kelivo-toggle">
               <span>
                 <strong>演示模式</strong>
-                <small>服务端启用 AGENT_MOCK 时可免 API Key 体验完整流程</small>
+                <small>仅电脑服务模式生效：服务端启用 AGENT_MOCK 时可免 API Key 体验完整流程</small>
               </span>
               <input
                 type="checkbox"

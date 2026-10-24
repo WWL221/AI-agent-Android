@@ -15,7 +15,9 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const request = event.request;
-  if (request.method !== 'GET' || new URL(request.url).pathname.startsWith('/api/')) return;
+  // 只缓存同源静态资源：跨域请求不进缓存，/api/ 永远走网络。
+  if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
+  if (new URL(request.url).pathname.startsWith('/api/')) return;
   event.respondWith(
     fetch(request)
       .then((response) => {
